@@ -137,6 +137,12 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
                               tol=1e-3)
       self._CompileAndCheck(lax_fun, args_maker, rtol={np.float64: 1e-14})
 
+  def testPoissonLogPmfFractionalLoc(self):
+    result = lsp_stats.poisson.logpmf(
+        jnp.array([1.5, 2.0]), mu=1.0, loc=0.5)
+    expected = np.array([-1.0, -np.inf])
+    self.assertAllClose(result, expected)
+
   @genNamedParametersNArgs(3)
   def testPoissonPmf(self, shapes, dtypes):
     rng = jtu.rand_default(self.rng())
