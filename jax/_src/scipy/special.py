@@ -3108,6 +3108,14 @@ def _spence_poly(w: Array) -> Array:
 
 
 def _spence_calc(x: Array) -> Array:
+  large_finite_x = jnp.isfinite(x) & (x >= 1.0 / jnp.finfo(x.dtype).tiny)
+  asymptotic = -np.pi ** 2 / 6.0 - 0.5 * jnp.log(x) ** 2
+
+  # Avoid forming a subnormal reciprocal for very large finite inputs. XLA
+  # flushes such reciprocals to zero, which would otherwise lead to inf * 0
+  # in the transformed branch below. The asymptotic form is exact to working
+  # precision once 1 / x is below the smallest normal value.
+  x = jnp.where(large_finite_x, 2.0, x)
   x2_bool = x > 2.0
   x = jnp.piecewise(x, [x2_bool],
                     [lambda x: 1.0 / x, lambda x: x])
@@ -3126,7 +3134,8 @@ def _spence_calc(x: Array) -> Array:
   y_flag_one = np.pi ** 2 / 6.0 - jnp.log(x) * jnp.log(1.0 - x) - y
   y = jnp.where(x_5_bool, y_flag_one, y)
   y_flag_two = -0.5 * jnp.log(x) ** 2 - y
-  return jnp.where(x2_bool, y_flag_two, y)
+  result = jnp.where(x2_bool, y_flag_two, y)
+  return jnp.where(large_finite_x, asymptotic, result)
 
 
 def _spence(x: Array) -> Array:

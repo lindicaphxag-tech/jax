@@ -383,6 +383,16 @@ class LaxScipySpecialFunctionsTest(jtu.JaxTestCase):
       result_jit = lsp_special.expi(x)
     self.assertAllClose(result_jit, result_nojit)
 
+  def testSpenceLargeFinite(self):
+    x = np.array([1e38, 3e38], dtype=np.float32)
+    self.assertAllClose(
+        osp_special.spence(x),
+        lsp_special.spence(x),
+        rtol=1e-6,
+        check_dtypes=False,
+    )
+    self.assertTrue(np.isnan(np.asarray(lsp_special.spence(np.float32(np.inf)))))
+
   def testGammaIncBoundaryValues(self):
     dtype = dtypes.default_float_dtype()
     nan = float('nan')
