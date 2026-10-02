@@ -1226,6 +1226,17 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
                             rtol={np.float64: 1e-14}, atol={np.float64: 1e-14})
 
 
+  def testTLargeDfLogPdf(self):
+    x = np.array([0.0, 1.0], dtype=np.float32)
+    df = np.array([1e5, 1e7], dtype=np.float32)
+    self.assertAllClose(
+        osp_stats.t.logpdf(x, df),
+        lsp_stats.t.logpdf(x, df),
+        rtol=1e-5,
+        atol=1e-6,
+        check_dtypes=False,
+    )
+
   @genNamedParametersNArgs(3)
   def testUniformLogPdf(self, shapes, dtypes):
     rng = jtu.rand_default(self.rng())
