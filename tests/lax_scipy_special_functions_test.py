@@ -361,6 +361,18 @@ class LaxScipySpecialFunctionsTest(jtu.JaxTestCase):
     self._CheckAgainstNumpy(osp_special.rel_entr, lsp_special.rel_entr, args_maker, rtol=rtol)
     self._CompileAndCheck(lsp_special.rel_entr, args_maker, rtol=rtol)
 
+  def testBetalnSubnormalRatio(self):
+    # XLA can flush a / b to zero when the quotient is subnormal. In that
+    # regime algdiv must recover d * log1p(a / b) without using the quotient.
+    a = np.array([1.0, 2.0], dtype=np.float32)
+    b = np.array([1e38, 3e38], dtype=np.float32)
+    self.assertAllClose(
+        osp_special.betaln(a, b),
+        lsp_special.betaln(a, b),
+        rtol=1e-5,
+        check_dtypes=False,
+    )
+
   def testBetaParameterDeprecation(self):
     with self.assertNoWarnings():
       lsp_special.beta(1, 1)
