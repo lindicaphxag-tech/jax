@@ -3486,7 +3486,7 @@ def _stirling_approx_tail(k):
   # true k in the asymptotic branch. Clamping k itself to 9 would make the
   # Stirling correction constant for every k > 9.
   table_k = lax.clamp(lax._const(k, 0.0), k, lax._const(k, 9.0))
-  approx_k = lax.select(use_tail_values, lax._const(k, 9.0), k)
+  approx_k = jnp.maximum(k, lax._const(k, 9.0))
   kp1sq = (approx_k + 1) * (approx_k + 1)
   approx = (
       1.0 / 12 - (1.0 / 360 - 1.0 / 1260 / kp1sq) / kp1sq
