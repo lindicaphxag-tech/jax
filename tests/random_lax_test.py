@@ -32,7 +32,7 @@ from jax._src import config
 from jax._src import core
 from jax._src import dtypes
 from jax._src.random.core import (_safe_int_to_float, _check_broadcast_shapes,
-                                  _poisson_from_normal)
+                                  _poisson_from_normal, _stirling_approx_tail)
 from jax._src import test_util as jtu
 from jax import vmap
 
@@ -1462,6 +1462,25 @@ class DistributionsTest(RandomTestBase):
         random.lognormal, static_argnames=['shape', 'dtype'])
     samples = rand(key, sigma, shape=(10000,), dtype=dtype)
     self._CheckKolmogorovSmirnovCDF(samples, scipy.stats.lognorm(s=sigma).cdf)
+
+  @jtu.sample_product(
+      dtype=[np.float32, np.float64],
+      k=[10.0, 100.0, 1e4],
+  )
+  def testStirlingApproxTailLargeK(self, dtype, k):
+    if dtype == np.float64 and not jax.config.x64_enabled:
+      self.skipTest("x64 is disabled")
+    k = jnp.asarray(k, dtype=dtype)
+    kp1 = np.asarray(k, dtype=np.float64) + 1.0
+    kp1sq = kp1 * kp1
+    expected = (
+        1.0 / 12.0
+        - (1.0 / 360.0 - 1.0 / 1260.0 / kp1sq) / kp1sq
+    ) / kp1
+    actual = _stirling_approx_tail(k)
+    actual_jit = jax.jit(_stirling_approx_tail)(k)
+    self.assertAllClose(actual, expected, rtol=2e-6, atol=2e-7)
+    self.assertAllClose(actual_jit, expected, rtol=2e-6, atol=2e-7)
 
   @jtu.sample_product(
       n= [5, 13, 21, 53, 500],
