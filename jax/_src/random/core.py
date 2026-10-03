@@ -3482,12 +3482,21 @@ def _stirling_approx_tail(k):
       dtype=k.dtype,
   )
   use_tail_values = k <= 9
-  k = lax.clamp(lax._const(k, 0.0), k, lax._const(k, 9.0))
-  kp1sq = (k + 1) * (k + 1)
-  approx = (1.0 / 12 - (1.0 / 360 - 1.0 / 1260 / kp1sq) / kp1sq) / (k + 1)
-  k = jnp.floor(k)
+  # Keep the table index in range for the branchless select, but preserve the
+  # true k in the asymptotic branch. Clamping k itself to 9 would make the
+  # Stirling correction constant for every k > 9.
+  table_k = lax.clamp(lax._const(k, 0.0), k, lax._const(k, 9.0))
+  approx_k = lax.select(use_tail_values, lax._const(k, 9.0), k)
+  kp1sq = (approx_k + 1) * (approx_k + 1)
+  approx = (
+      1.0 / 12 - (1.0 / 360 - 1.0 / 1260 / kp1sq) / kp1sq
+  ) / (approx_k + 1)
+  table_k = jnp.floor(table_k)
   return lax.select(
-      use_tail_values, stirling_tail_vals[jnp.asarray(k, dtype='int32')], approx)
+      use_tail_values,
+      stirling_tail_vals[jnp.asarray(table_k, dtype='int32')],
+      approx,
+  )
 
 
 @jit(static_argnums=(3, 4, 5), inline=Inline.JAX_EARLY)
