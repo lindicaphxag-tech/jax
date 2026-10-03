@@ -1482,6 +1482,14 @@ class DistributionsTest(RandomTestBase):
     self.assertAllClose(actual, expected, rtol=2e-6, atol=2e-7)
     self.assertAllClose(actual_jit, expected, rtol=2e-6, atol=2e-7)
 
+  def testStirlingApproxTailVectorized(self):
+    k = jnp.asarray([0.0, 9.0, 10.0, 100.0, 1e4], dtype=jnp.float32)
+    actual = np.asarray(_stirling_approx_tail(k))
+    self.assertAllClose(actual[:2], np.asarray([
+        0.0810614667953272, 0.00833056343336287
+    ], dtype=np.float32), rtol=2e-6, atol=2e-7)
+    self.assertTrue(np.all(np.diff(actual[1:]) < 0))
+
   @jtu.sample_product(
       n= [5, 13, 21, 53, 500],
       p= [0.1, 0.3, 0.5, 0.7, 0.9],
