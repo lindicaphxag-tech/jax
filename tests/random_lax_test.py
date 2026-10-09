@@ -1518,6 +1518,18 @@ class DistributionsTest(RandomTestBase):
     self.assertAllClose(samples.var(), n * p * (1 - p) , rtol=0.036,
                         check_dtypes=False)
 
+  def testBinomialLargeCountTailRegression(self):
+    # The same Stirling helper feeds binomial BTRS. Check that restoring
+    # the k-dependent asymptotic correction preserves mean and variance.
+    n = 1_000_000
+    p = 0.35
+    samples = random.binomial(
+        self.make_key(13), n, p, shape=(6000,), dtype=jnp.float32)
+    self.assertAllClose(
+        samples.mean(), n * p, rtol=1e-3, check_dtypes=False)
+    self.assertAllClose(
+        samples.var(), n * p * (1 - p), rtol=0.10, check_dtypes=False)
+
   def testBinomialCornerCases(self):
     key = lambda: self.make_key(0)
 
