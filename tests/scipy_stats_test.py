@@ -159,7 +159,14 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
     ]
     self._CheckAgainstNumpy(
         scipy_fun, lax_fun, args_maker, check_dtypes=False, tol=2e-3)
-    self._CompileAndCheck(lax_fun, args_maker)
+    # At 1e8, the float32 eager and XLA log1p implementations may differ
+    # by ~3e-4 in log-density while agreeing with the SciPy reference.
+    # Keep JIT comparison strict enough to detect material drift without
+    # requiring bitwise-equivalent transcendental implementations.
+    self._CompileAndCheck(
+        lax_fun, args_maker,
+        rtol={np.float32: 5e-5, np.float64: 1e-12},
+        atol={np.float32: 5e-4, np.float64: 1e-11})
 
   @jtu.sample_product(dtype=jtu.dtypes.floating)
   def testPoissonLogPmfTinyRateFarTail(self, dtype):
