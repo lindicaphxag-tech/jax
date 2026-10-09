@@ -55,7 +55,7 @@ def logpmf(k: ArrayLike, mu: ArrayLike, loc: ArrayLike = 0) -> Array:
   x = lax.sub(k, loc)
   log_probs = _poisson_log_pmf(x, mu)
   return jnp.where(jnp.logical_or(lax.lt(x, zero),
-                                  lax.ne(jnp.round(k), k)), -np.inf, log_probs)
+                                  lax.ne(jnp.round(x), x)), -np.inf, log_probs)
 
 
 def pmf(k: ArrayLike, mu: ArrayLike, loc: ArrayLike = 0) -> Array:
