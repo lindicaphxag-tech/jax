@@ -161,6 +161,21 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
         scipy_fun, lax_fun, args_maker, check_dtypes=False, tol=2e-3)
     self._CompileAndCheck(lax_fun, args_maker)
 
+  @jtu.sample_product(dtype=jtu.dtypes.floating)
+  def testPoissonLogPmfTinyRateFarTail(self, dtype):
+    # The shared near-mean log1p rewrite must NOT be used when k >> mu:
+    # 1 - (k - mu) / k rounds to zero and can produce a spurious -inf.
+    k = np.array([100.0, 1e4, 1e6], dtype=dtype)
+    mu = np.asarray(1e-8, dtype=dtype)
+    expected = osp_stats.poisson.logpmf(k.astype(np.float64), float(mu))
+    actual = np.asarray(lsp_stats.poisson.logpmf(k, mu))
+    actual_jit = np.asarray(jax.jit(lsp_stats.poisson.logpmf)(k, mu))
+    self.assertAllClose(actual, expected, check_dtypes=False,
+                        rtol=1e-6, atol=1e-5)
+    self.assertAllClose(actual_jit, expected, check_dtypes=False,
+                        rtol=1e-6, atol=1e-5)
+    self.assertTrue(np.isfinite(actual).all())
+
   @genNamedParametersNArgs(3)
   def testPoissonPmf(self, shapes, dtypes):
     rng = jtu.rand_default(self.rng())
