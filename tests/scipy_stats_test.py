@@ -146,6 +146,21 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
     self.assertAllClose(result, expected, check_dtypes=False,
                         atol=1e-3, rtol=1e-3)
 
+  @jtu.sample_product(dtype=jtu.dtypes.floating)
+  def testPoissonLogPmfLargeLambda(self, dtype):
+    # Exact same stabilized log-PMF as used by the transformed rejection
+    # sampler. Testing it through the public SciPy-compatible API also
+    # guards against the ~constant tail bug at large k.
+    scipy_fun = osp_stats.poisson.logpmf
+    lax_fun = lsp_stats.poisson.logpmf
+    args_maker = lambda: [
+        np.array([1e8 - 1e4, 1e8, 1e8 + 1e4], dtype=dtype),
+        np.full(3, 1e8, dtype=dtype),
+    ]
+    self._CheckAgainstNumpy(
+        scipy_fun, lax_fun, args_maker, check_dtypes=False, tol=2e-3)
+    self._CompileAndCheck(lax_fun, args_maker)
+
   @genNamedParametersNArgs(3)
   def testPoissonPmf(self, shapes, dtypes):
     rng = jtu.rand_default(self.rng())
