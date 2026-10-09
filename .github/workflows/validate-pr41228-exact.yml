@@ -1,0 +1,60 @@
+name: Exact source JAX Poisson #41228 focused statistical and numerical CI
+
+on:
+  push:
+    branches:
+      - validation/poisson-41228-exact-head-20261010
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        py: ['3.12', '3.13']
+    env:
+      JAX_ENABLE_X64: 'true'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+      - name: Enforce exact already-submitted four PR source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object jax/_src/random/core.py)" = 8e6477ea8c59cfa448e46d0a45d2a82654a7bf14
+          test "$(git hash-object jax/_src/scipy/stats/poisson.py)" = 9d519197342499fb8757e585644ce55d74f5e7ef
+          test "$(git hash-object tests/random_lax_test.py)" = 4667aab445f58d62e333994a0d730e719103de5b
+          test "$(git hash-object tests/scipy_stats_test.py)" = 4ffe9eb919ebca15acdb3755cbe2a72114ffed89
+          python -m py_compile jax/_src/random/core.py jax/_src/scipy/stats/poisson.py tests/random_lax_test.py tests/scipy_stats_test.py
+          echo EXACT_SUBMITTED_PR_FOUR_SOURCE_BLOBS_MATCH
+      - name: Install matching published JAX CPU library and testing dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[ci]' pytest absl-py hypothesis parameterized portpicker
+          python - <<'PY'
+          import jax, jaxlib, numpy, scipy
+          print("SOURCE_EXACT_HEAD_JAX",jax.__version__,"JAXLIB",jaxlib.__version__,"NUMPY",numpy.__version__,"SCIPY",scipy.__version__)
+          PY
+      - name: Poisson and Binomial exact-PR-focused regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/random_lax_test.py -k 'PoissonLargeLambdaLogPmf or PoissonRejectionLogPmfMatchesScipy or PoissonLargeLambdaVariance or StirlingTailUsesUnclampedLargeArgument or BinomialLargeCountTailRegression' | tee random_focus.log
+          python -m pytest -q tests/scipy_stats_test.py -k 'PoissonLogPmfLargeLambda or PoissonLogPmfTinyRateFarTail' | tee scipy_focus.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jax41228-focused-${{ matrix.py }}
+          path: |
+            random_focus.log
+            scipy_focus.log
+          if-no-files-found: warn
