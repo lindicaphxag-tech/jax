@@ -1950,12 +1950,23 @@ def _poisson_log_pmf(k, lam):
   # around k ~= lam and use the Stirling correction already used by BTRS.
   safe_k = jnp.maximum(k, lax._const(k, 1.0))
   delta = safe_k - lam
-  log_pmf = (
+  near_mean_log_pmf = (
       safe_k * lax.log1p(-delta / safe_k)
       + delta
       - 0.5 * lax.log(lax._const(k, 2 * np.pi) * safe_k)
       - _stirling_approx_tail(safe_k - 1)
   )
+  # The log1p argument rounds to -1 when k is much larger than lam,
+  # returning -inf (or losing large absolute accuracy) for valid far tails.
+  # Away from the cancellation-prone k ~= lam region, the direct formula
+  # retains more digits; the sampler only exercises the near-mean path.
+  far_tail_log_pmf = (
+      lax.sub(lax.add(lax.mul(safe_k, lax.log(lam)), lax.neg(lam)),
+              lax_special.lgamma(safe_k + lax._const(k, 1)))
+  )
+  log_pmf = jnp.where(
+      lam / safe_k < lax._const(k, 0.5),
+      far_tail_log_pmf, near_mean_log_pmf)
   return jnp.where(k == 0, -lam, log_pmf)
 
 
