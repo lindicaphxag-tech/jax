@@ -32,7 +32,8 @@ from jax._src import config
 from jax._src import core
 from jax._src import dtypes
 from jax._src.random.core import (_safe_int_to_float, _check_broadcast_shapes,
-                                  _poisson_from_normal, _poisson_log_pmf)
+                                  _poisson_from_normal, _poisson_log_pmf,
+                                  _stirling_approx_tail)
 from jax._src import test_util as jtu
 from jax import vmap
 
@@ -827,6 +828,19 @@ class DistributionsTest(RandomTestBase):
     actual = np.asarray(_poisson_log_pmf(k, lam32), dtype=np.float64)
     expected = scipy.stats.poisson.logpmf(np.asarray(k, dtype=np.float64), lam)
     self.assertAllClose(actual, expected, rtol=2e-3, atol=2e-3)
+
+  def testStirlingTailUsesUnclampedLargeArgument(self):
+    # Regression: clamping k to the lookup-table range before evaluating
+    # the asymptotic branch returned the same ~0.00833 term for every k > 9.
+    k = jnp.array([9., 10., 100., 1000., 1e7], dtype=jnp.float32)
+    got = np.asarray(_stirling_approx_tail(k))
+    self.assertGreater(got[0], got[1])
+    self.assertGreater(got[1], got[2])
+    self.assertGreater(got[2], got[3])
+    self.assertGreater(got[3], got[4])
+    np.testing.assert_allclose(
+        got[1:], 1.0 / (12.0 * (np.asarray(k[1:]) + 1.0)),
+        rtol=2e-3, atol=1e-8)
 
   def testPoissonLargeLambdaVariance(self):
     lam = 1e8
