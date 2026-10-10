@@ -1,0 +1,47 @@
+name: Validate squashed PR 41228 exact files
+
+on:
+  push:
+    branches:
+      - ci/validate-poisson-41228-squashed-20261011
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  exact-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      JAX_PLATFORMS: cpu
+      JAX_ENABLE_X64: "true"
+      PR_HEAD: 3ef5a045d0492f2f6e5f4f1d8e7e01f4216ebaa9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact PR blobs
+        run: |
+          test "$(git hash-object 'jax/_src/random/core.py')" = "9796f9b7d9e68dd6da023a775a747cf55600c2f5"
+          test "$(git hash-object 'jax/_src/scipy/stats/poisson.py')" = "9d519197342499fb8757e585644ce55d74f5e7ef"
+          test "$(git hash-object 'tests/random_lax_test.py')" = "2f8d535bbcf685e6a460f015c186a6277f693a79"
+          test "$(git hash-object 'tests/scipy_stats_test.py')" = "8e3e91617fe95c02355dc5991b75e9771095ef71"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . scipy pytest absl-py
+      - name: Run focused regressions
+        run: |
+          python -m pytest tests/random_lax_test.py -q -k "PoissonLargeLambdaLogPmf or PoissonRejectionLogPmfMatchesScipy or PoissonCentralDevianceAvoidsFloat32Cancellation or PoissonLogPmfTinyRateGradientsRemainFinite or PoissonLargeLambdaVariance"
+          python -m pytest tests/scipy_stats_test.py -q -k "PoissonLogPmfLargeLambda or PoissonLogPmfCentralFloat32Accurate or PoissonLogPmfLargeCountFarTailFloat32 or PoissonLogPmfPublicApiTinyRateAutodiff or PoissonLogPmfTinyRateSecondDerivative or PoissonLogPmfTinyRateFarTail"
+      - name: Publish PR-head success status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PR_HEAD}" \
+            -f state=success \
+            -f context='fork/jax-41228-validation' \
+            -f description='exact PR blobs + focused Linux CPU tests passed' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
