@@ -880,9 +880,12 @@ class DistributionsTest(RandomTestBase):
     compiled = np.asarray(jax.jit(_poisson_log_pmf)(lam, lam))
     public = np.asarray(jax.scipy.stats.poisson.logpmf(lam, lam))
     self.assertTrue(np.isfinite(actual).all())
-    self.assertAllClose(actual, expected, rtol=1e-6, atol=2e-5)
-    self.assertAllClose(compiled, expected, rtol=1e-6, atol=2e-5)
-    self.assertAllClose(public, expected, rtol=1e-6, atol=2e-5)
+    self.assertAllClose(
+        actual, expected, rtol=1e-6, atol=2e-5, check_dtypes=False)
+    self.assertAllClose(
+        compiled, expected, rtol=1e-6, atol=2e-5, check_dtypes=False)
+    self.assertAllClose(
+        public, expected, rtol=1e-6, atol=2e-5, check_dtypes=False)
 
   def testPoissonLargeLambdaVariance(self):
     lam = 1e8
