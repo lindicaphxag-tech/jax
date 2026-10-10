@@ -1,0 +1,44 @@
+name: Validate squashed PR 41227 exact files
+
+on:
+  push:
+    branches:
+      - ci/validate-student-t-41227-squashed-20261011
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  exact-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      JAX_PLATFORMS: cpu
+      JAX_ENABLE_X64: "true"
+      PR_HEAD: 5ca3f43d82c7bf81351074816781c9e1d755f6ed
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact PR blobs
+        run: |
+          test "$(git hash-object 'jax/_src/scipy/stats/t.py')" = "bd01f0c4e18e309e3ad44d2aa98441bd91c789ab"
+          test "$(git hash-object 'tests/scipy_stats_test.py')" = "1e40a991e878ac7da5ad41e5ffb44296ca3f2d91"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . scipy pytest absl-py
+      - name: Run focused regressions
+        run: |
+          python -m pytest tests/scipy_stats_test.py -k "TLogPdfLargeDf or TLogPdfExtremeScale" -q
+      - name: Publish PR-head success status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PR_HEAD}" \
+            -f state=success \
+            -f context='fork/jax-41227-validation' \
+            -f description='exact PR blobs + focused Linux CPU tests passed' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
