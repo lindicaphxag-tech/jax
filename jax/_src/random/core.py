@@ -1961,7 +1961,13 @@ def _poisson_log_pmf(k, lam):
   series = ((((((t / 8 + 1 / 7) * t + 1 / 6) * t + 1 / 5)
               * t + 1 / 4) * t + 1 / 3) * t + 1 / 2)
   central_deviance = -safe_k * (t * t) * series
-  regular_deviance = safe_k * lax.log1p(-relative_delta) + delta
+  # For the far-tail path, log1p(-relative_delta) can hit log(0)
+  # even though the result is discarded. Autodiff through an inactive
+  # singular branch can produce NaN gradients for tiny positive rates.
+  use_far_tail = lam / safe_k < lax._const(k, 0.5)
+  regular_relative_delta = jnp.where(
+      use_far_tail, lax._const(k, 0.0), relative_delta)
+  regular_deviance = safe_k * lax.log1p(-regular_relative_delta) + delta
   deviance = jnp.where(small_delta, central_deviance, regular_deviance)
   near_mean_log_pmf = (
       deviance
@@ -1972,14 +1978,18 @@ def _poisson_log_pmf(k, lam):
   # returning -inf (or losing large absolute accuracy) for valid far tails.
   # Away from the cancellation-prone k ~= lam region, the direct formula
   # retains more digits; the sampler only exercises the near-mean path.
+  # k=0 has exactly logpmf=-lam. Mask its otherwise unused
+  # log(lam) term so grad(logpmf(0, lam)) remains -1 even at lam=0.
+  safe_rate_for_log = jnp.where(k == 0, lax._const(k, 1.0), lam)
   far_tail_log_pmf = (
-      lax.sub(lax.add(lax.mul(safe_k, lax.log(lam)), lax.neg(lam)),
+      lax.sub(lax.add(lax.mul(safe_k, lax.log(safe_rate_for_log)), lax.neg(lam)),
               lax_special.lgamma(safe_k + lax._const(k, 1)))
   )
-  log_pmf = jnp.where(
-      lam / safe_k < lax._const(k, 0.5),
-      far_tail_log_pmf, near_mean_log_pmf)
-  return jnp.where(k == 0, -lam, log_pmf)
+  log_pmf = jnp.where(use_far_tail, far_tail_log_pmf, near_mean_log_pmf)
+  result = jnp.where(k == 0, -lam, log_pmf)
+  # An invalid negative rate must not produce a positive log-probability
+  # at k=0; follow the public SciPy distribution's domain semantics.
+  return jnp.where(lam < lax._const(k, 0.0), jnp.nan, result)
 
 
 @jit(static_argnums=(2, 3, 4))
