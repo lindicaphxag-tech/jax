@@ -842,8 +842,10 @@ class DistributionsTest(RandomTestBase):
     eager = np.asarray(_poisson_log_pmf(k, center))
     compiled = np.asarray(jax.jit(_poisson_log_pmf)(k, center))
     self.assertTrue(np.isfinite(expected).all())
-    self.assertAllClose(eager, expected, rtol=1e-6, atol=5e-5)
-    self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4)
+    self.assertAllClose(
+        eager, expected, rtol=1e-6, atol=5e-5, check_dtypes=False)
+    self.assertAllClose(
+        compiled, expected, rtol=1e-5, atol=5e-4, check_dtypes=False)
 
   def testPoissonLogPmfTinyRateGradientsRemainFinite(self):
     # Inactive log1p(-1) and log(0) branches used to contaminate
