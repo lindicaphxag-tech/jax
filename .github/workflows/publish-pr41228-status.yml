@@ -1,0 +1,33 @@
+name: Publish validated status for PR 41228
+
+on:
+  push:
+    branches:
+      - ci/publish-jax-41228-status-20261011
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PR_HEAD: fbd0d2256286b85961b46caa64564d369a9830ed
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact validated PR blobs
+        run: |
+          test "$(git hash-object jax/_src/random/core.py)" = "ffe5ca968973fcf63981fdd648dc53dcb63eb42f"
+          test "$(git hash-object jax/_src/scipy/stats/poisson.py)" = "9d519197342499fb8757e585644ce55d74f5e7ef"
+          test "$(git hash-object tests/random_lax_test.py)" = "26b32f59933b3b27981c0d8a2d1769349790a256"
+          test "$(git hash-object tests/scipy_stats_test.py)" = "8e3e91617fe95c02355dc5991b75e9771095ef71"
+      - name: Publish exact-source validation status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PR_HEAD}" \
+            -f state=success \
+            -f context='fork/jax-41228-validation' \
+            -f description='exact PR blobs; 21 focused Linux CPU tests passed' \
+            -f target_url='https://github.com/lindicaphxag-tech/jax/actions/runs/38081372488'
