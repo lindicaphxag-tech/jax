@@ -51,7 +51,8 @@ def logpdf(x: ArrayLike, df: ArrayLike, loc: ArrayLike = 0, scale: ArrayLike = 1
   scaled_x = lax.div(lax.sub(x, loc), scale)
   df_over_two = lax.mul(df, half)
   df_plus_one_over_two = lax.add(df_over_two, half)
-  normalize_term_tmp = lax.mul(lax.log(lax.mul(lax.mul(scale, scale), df)), half)
+  # Avoid under/overflow of scale**2 * df before taking its logarithm.
+  normalize_term_tmp = lax.add(lax.log(lax.abs(scale)), lax.mul(lax.log(df), half))
   normalize_term = lax.add(betaln(df_over_two, half), normalize_term_tmp)
   quadratic = lax.div(lax.mul(scaled_x, scaled_x), df)
   return lax.neg(lax.add(normalize_term, lax.mul(df_plus_one_over_two, lax.log1p(quadratic))))
