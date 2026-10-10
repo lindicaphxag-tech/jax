@@ -1969,9 +1969,21 @@ def _poisson_log_pmf(k, lam):
       use_far_tail, lax._const(k, 0.0), relative_delta)
   regular_deviance = safe_k * lax.log1p(-regular_relative_delta) + delta
   deviance = jnp.where(small_delta, central_deviance, regular_deviance)
+  # Keep the large-k correction local to Poisson rather than changing the
+  # shared BTRS helper, which is also used by binomial sampling.
+  stirling_k_sq = safe_k * safe_k
+  asymptotic_stirling_tail = (
+      1.0 / 12
+      - (1.0 / 360 - 1.0 / 1260 / stirling_k_sq) / stirling_k_sq
+  ) / safe_k
+  stirling_tail = jnp.where(
+      safe_k <= lax._const(k, 10.0),
+      _stirling_approx_tail(safe_k - lax._const(k, 1.0)),
+      asymptotic_stirling_tail,
+  )
   log_normalizer = (
       0.5 * lax.log(lax._const(k, 2 * np.pi) * safe_k)
-      + _stirling_approx_tail(safe_k - 1)
+      + stirling_tail
   )
   near_mean_log_pmf = deviance - log_normalizer
   # In the far tail, log1p(-relative_delta) can round to log(0), but
@@ -3541,16 +3553,12 @@ def _stirling_approx_tail(k):
       dtype=k.dtype,
   )
   use_tail_values = k <= 9
-  # Preserve the original argument for the asymptotic branch. Clamping it
-  # before this calculation incorrectly makes the tail constant for k > 9.
-  large_k = jnp.maximum(k, lax._const(k, 10.0))
-  kp1sq = (large_k + 1) * (large_k + 1)
-  approx = (1.0 / 12 - (1.0 / 360 - 1.0 / 1260 / kp1sq) / kp1sq) / (large_k + 1)
-  table_index = jnp.floor(
-      lax.clamp(lax._const(k, 0.0), k, lax._const(k, 9.0)))
+  k = lax.clamp(lax._const(k, 0.0), k, lax._const(k, 9.0))
+  kp1sq = (k + 1) * (k + 1)
+  approx = (1.0 / 12 - (1.0 / 360 - 1.0 / 1260 / kp1sq) / kp1sq) / (k + 1)
+  k = jnp.floor(k)
   return lax.select(
-      use_tail_values,
-      stirling_tail_vals[jnp.asarray(table_index, dtype='int32')], approx)
+      use_tail_values, stirling_tail_vals[jnp.asarray(k, dtype='int32')], approx)
 
 
 @jit(static_argnums=(3, 4, 5), inline=Inline.JAX_EARLY)
