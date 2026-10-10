@@ -842,6 +842,22 @@ class DistributionsTest(RandomTestBase):
         got[1:], 1.0 / (12.0 * (np.asarray(k[1:]) + 1.0)),
         rtol=2e-3, atol=1e-8)
 
+  @jtu.sample_product(lam=[1e7, 1e8, 1e9])
+  def testPoissonCentralDevianceAvoidsFloat32Cancellation(self, lam):
+    # Regression for loss of O(1e-3) to O(1e-2) in log probability when
+    # k - lam = O(sqrt(lam)), even after the leading Stirling rewrite.
+    # Compare at the exact float32 representable k values.
+    center = jnp.float32(lam)
+    offsets = jnp.asarray([-5.0, -3.0, -1.0, 0.0, 1.0, 3.0, 5.0])
+    k = center + offsets * jnp.sqrt(center)
+    expected = scipy.stats.poisson.logpmf(
+        np.asarray(k, dtype=np.float64), float(np.float32(lam)))
+    eager = np.asarray(_poisson_log_pmf(k, center))
+    compiled = np.asarray(jit(_poisson_log_pmf)(k, center))
+    self.assertTrue(np.isfinite(expected).all())
+    self.assertAllClose(eager, expected, rtol=1e-6, atol=5e-5)
+    self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4)
+
   def testPoissonLargeLambdaVariance(self):
     lam = 1e8
     samples = np.asarray(
