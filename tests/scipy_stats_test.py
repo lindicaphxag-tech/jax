@@ -184,6 +184,20 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
     self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4,
                         check_dtypes=False)
 
+  def testPoissonLogPmfLargeCountFarTailFloat32(self):
+    # A direct k*log(mu) - gammaln(k+1) subtraction loses hundreds or
+    # thousands of float32 log-probability units for large far-tail counts.
+    # Compare to SciPy in float64 at exactly representable float32 inputs.
+    count = np.float32(1e9)
+    rates = (count * np.array([0.2, 0.3, 0.4, 0.49],
+                              dtype=np.float32))
+    expected = osp_stats.poisson.logpmf(
+        np.full(4, count, dtype=np.float64), rates.astype(np.float64))
+    actual = np.asarray(lsp_stats.poisson.logpmf(count, rates))
+    compiled = np.asarray(jax.jit(lsp_stats.poisson.logpmf)(count, rates))
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=128.0)
+    np.testing.assert_allclose(compiled, expected, rtol=0.0, atol=128.0)
+
   def testPoissonLogPmfPublicApiTinyRateAutodiff(self):
     # A correct PMF value can conceal NaN reverse-mode derivatives if
     # an unselected numerical branch evaluates log(0) or log1p(-1).
