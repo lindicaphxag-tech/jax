@@ -853,7 +853,7 @@ class DistributionsTest(RandomTestBase):
     expected = scipy.stats.poisson.logpmf(
         np.asarray(k, dtype=np.float64), float(np.float32(lam)))
     eager = np.asarray(_poisson_log_pmf(k, center))
-    compiled = np.asarray(jit(_poisson_log_pmf)(k, center))
+    compiled = np.asarray(jax.jit(_poisson_log_pmf)(k, center))
     self.assertTrue(np.isfinite(expected).all())
     self.assertAllClose(eager, expected, rtol=1e-6, atol=5e-5)
     self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4)
