@@ -47,10 +47,9 @@ def logpdf(x: ArrayLike, df: ArrayLike, loc: ArrayLike = 0, scale: ArrayLike = 1
     :func:`jax.scipy.stats.t.pdf`
   """
   x, df, loc, scale = promote_args_inexact("t.logpdf", x, df, loc, scale)
-  two = _lax_const(x, 2)
-  scaled_x = lax.div(lax.sub(x, loc), scale)
-  df_over_two = lax.div(df, two)
   half = _lax_const(x, 0.5)
+  scaled_x = lax.div(lax.sub(x, loc), scale)
+  df_over_two = lax.mul(df, half)
   df_plus_one_over_two = lax.add(df_over_two, half)
   normalize_term_tmp = lax.mul(lax.log(lax.mul(lax.mul(scale, scale), df)), half)
   normalize_term = lax.add(betaln(df_over_two, half), normalize_term_tmp)
