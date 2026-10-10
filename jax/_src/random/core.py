@@ -1950,9 +1950,21 @@ def _poisson_log_pmf(k, lam):
   # around k ~= lam and use the Stirling correction already used by BTRS.
   safe_k = jnp.maximum(k, lax._const(k, 1.0))
   delta = safe_k - lam
+  relative_delta = delta / safe_k
+  # log1p(-t) + t is O(t**2): separately computing
+  # k * log1p(-t) + (k - lam) loses digits near the mean in float32.
+  # For |t| <= 0.01 use -k * sum(t**n / n, n=2..8); the absolute
+  # series remainder is bounded by k * |t|**9 / (9 * (1 - |t|)).
+  # Mask the polynomial argument to prevent overflow in unselected tails.
+  small_delta = jnp.abs(relative_delta) <= lax._const(k, 0.01)
+  t = jnp.where(small_delta, relative_delta, lax._const(k, 0.0))
+  series = ((((((t / 8 + 1 / 7) * t + 1 / 6) * t + 1 / 5)
+              * t + 1 / 4) * t + 1 / 3) * t + 1 / 2)
+  central_deviance = -safe_k * (t * t) * series
+  regular_deviance = safe_k * lax.log1p(-relative_delta) + delta
+  deviance = jnp.where(small_delta, central_deviance, regular_deviance)
   near_mean_log_pmf = (
-      safe_k * lax.log1p(-delta / safe_k)
-      + delta
+      deviance
       - 0.5 * lax.log(lax._const(k, 2 * np.pi) * safe_k)
       - _stirling_approx_tail(safe_k - 1)
   )
