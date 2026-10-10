@@ -168,6 +168,22 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
         rtol={np.float32: 5e-5, np.float64: 1e-12},
         atol={np.float32: 5e-4, np.float64: 1e-11})
 
+  @jtu.sample_product(mu=[1e7, 1e8, 1e9])
+  def testPoissonLogPmfCentralFloat32Accurate(self, mu):
+    # Public API regression for cancellation near k = mu. Build reference
+    # values using the actual representable float32 integers, not an
+    # unrealizable high-precision offset.
+    center = np.float32(mu)
+    offsets = np.asarray([-5, -3, -1, 0, 1, 3, 5], np.float32)
+    k = center + offsets * np.sqrt(center)
+    expected = osp_stats.poisson.logpmf(k.astype(np.float64), float(center))
+    actual = np.asarray(lsp_stats.poisson.logpmf(k, center))
+    compiled = np.asarray(jax.jit(lsp_stats.poisson.logpmf)(k, center))
+    self.assertAllClose(actual, expected, rtol=1e-6, atol=5e-5,
+                        check_dtypes=False)
+    self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4,
+                        check_dtypes=False)
+
   @jtu.sample_product(dtype=jtu.dtypes.floating)
   def testPoissonLogPmfTinyRateFarTail(self, dtype):
     # The shared near-mean log1p rewrite must NOT be used when k >> mu:
