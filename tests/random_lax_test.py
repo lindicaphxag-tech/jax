@@ -868,6 +868,22 @@ class DistributionsTest(RandomTestBase):
         np.testing.assert_allclose(gradient, expected_grad, rtol=3e-5)
         np.testing.assert_allclose(gradient_jit, expected_grad, rtol=3e-5)
 
+  def testPoissonCentralLogPmfNearFloat32Maximum(self):
+    # At a finite k near 1e38, the intermediate 2*pi*k overflows
+    # float32 even though -0.5*log(2*pi*k) remains finite.
+    lam = jnp.array([1e36, 1e37, 1e38], dtype=jnp.float32)
+    expected = -0.5 * (
+        np.log(2 * np.pi) + np.log(np.asarray(lam, dtype=np.float64)))
+    # At the mode the Stirling correction is < 1e-36, so the normal
+    # approximation is accurate far beyond float32 precision.
+    actual = np.asarray(_poisson_log_pmf(lam, lam))
+    compiled = np.asarray(jax.jit(_poisson_log_pmf)(lam, lam))
+    public = np.asarray(jax.scipy.stats.poisson.logpmf(lam, lam))
+    self.assertTrue(np.isfinite(actual).all())
+    self.assertAllClose(actual, expected, rtol=1e-6, atol=2e-5)
+    self.assertAllClose(compiled, expected, rtol=1e-6, atol=2e-5)
+    self.assertAllClose(public, expected, rtol=1e-6, atol=2e-5)
+
   def testPoissonLargeLambdaVariance(self):
     lam = 1e8
     samples = np.asarray(
