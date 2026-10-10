@@ -184,6 +184,31 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
     self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4,
                         check_dtypes=False)
 
+  def testPoissonLogPmfPublicApiTinyRateAutodiff(self):
+    # A correct PMF value can conceal NaN reverse-mode derivatives if
+    # an unselected numerical branch evaluates log(0) or log1p(-1).
+    for mu in [0.0, 1e-12, 1e-8]:
+      for k in [0.0, 1.0, 2.0]:
+        rate = jnp.float32(mu)
+        fun = lambda r: lsp_stats.poisson.logpmf(jnp.float32(k), r)
+        expected = osp_stats.poisson.logpmf(k, mu)
+        actual = np.asarray(fun(rate))
+        self.assertAllClose(actual, expected, check_dtypes=False,
+                            rtol=2e-6, atol=2e-5)
+        if mu == 0.0 and k > 0:
+          self.assertTrue(np.isneginf(actual))
+          continue
+        correct_grad = np.float32(-1.0 if k == 0 else k / mu - 1.0)
+        eager = np.asarray(jax.grad(fun)(rate))
+        compiled = np.asarray(jax.jit(jax.grad(fun))(rate))
+        self.assertTrue(np.isfinite(eager))
+        np.testing.assert_allclose(eager, correct_grad, rtol=3e-5)
+        np.testing.assert_allclose(compiled, correct_grad, rtol=3e-5)
+
+    # Negative Poisson rates are outside the probability model's domain.
+    self.assertTrue(np.isnan(np.asarray(
+        lsp_stats.poisson.logpmf(jnp.float32(0.0), jnp.float32(-1.0)))))
+
   @jtu.sample_product(dtype=jtu.dtypes.floating)
   def testPoissonLogPmfTinyRateFarTail(self, dtype):
     # The shared near-mean log1p rewrite must NOT be used when k >> mu:
