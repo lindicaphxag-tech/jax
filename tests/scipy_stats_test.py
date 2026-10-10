@@ -209,6 +209,17 @@ class LaxBackedScipyStatsTests(jtu.JaxTestCase):
     self.assertTrue(np.isnan(np.asarray(
         lsp_stats.poisson.logpmf(jnp.float32(0.0), jnp.float32(-1.0)))))
 
+  def testPoissonLogPmfTinyRateSecondDerivative(self):
+    # The masked inactive branches must not contaminate higher-order AD.
+    for count, rate in [(0.0, 0.0), (1.0, 1e-8), (2.0, 1e-5)]:
+      f = lambda mu: lsp_stats.poisson.logpmf(jnp.float32(count), mu)
+      mu = jnp.float32(rate)
+      hessian = np.asarray(jax.jit(jax.grad(jax.grad(f)))(mu))
+      expected = np.float32(
+          0.0 if count == 0.0 else -count / (rate * rate))
+      self.assertTrue(np.isfinite(hessian))
+      np.testing.assert_allclose(hessian, expected, rtol=3e-5)
+
   @jtu.sample_product(dtype=jtu.dtypes.floating)
   def testPoissonLogPmfTinyRateFarTail(self, dtype):
     # The shared near-mean log1p rewrite must NOT be used when k >> mu:
