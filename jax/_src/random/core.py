@@ -1969,22 +1969,25 @@ def _poisson_log_pmf(k, lam):
       use_far_tail, lax._const(k, 0.0), relative_delta)
   regular_deviance = safe_k * lax.log1p(-regular_relative_delta) + delta
   deviance = jnp.where(small_delta, central_deviance, regular_deviance)
-  near_mean_log_pmf = (
-      deviance
-      - 0.5 * lax.log(lax._const(k, 2 * np.pi) * safe_k)
-      - _stirling_approx_tail(safe_k - 1)
+  log_normalizer = (
+      0.5 * lax.log(lax._const(k, 2 * np.pi) * safe_k)
+      + _stirling_approx_tail(safe_k - 1)
   )
-  # The log1p argument rounds to -1 when k is much larger than lam,
-  # returning -inf (or losing large absolute accuracy) for valid far tails.
-  # Away from the cancellation-prone k ~= lam region, the direct formula
-  # retains more digits; the sampler only exercises the near-mean path.
-  # k=0 has exactly logpmf=-lam. Mask its otherwise unused
-  # log(lam) term so grad(logpmf(0, lam)) remains -1 even at lam=0.
+  near_mean_log_pmf = deviance - log_normalizer
+  # In the far tail, log1p(-relative_delta) can round to log(0), but
+  # computing k*log(lam) - lgamma(k+1) loses O(k) digits in float32.
+  # Express the deviance using log(lam/k) instead; use separate logs only
+  # when lam/k underflows. This also serves the public poisson.logpmf API.
+  # k=0 is handled exactly. Mask the inactive log-rate branch so its
+  # derivative remains -1 at lam=0.
   safe_rate_for_log = jnp.where(k == 0, lax._const(k, 1.0), lam)
-  far_tail_log_pmf = (
-      lax.sub(lax.add(lax.mul(safe_k, lax.log(safe_rate_for_log)), lax.neg(lam)),
-              lax_special.lgamma(safe_k + lax._const(k, 1)))
-  )
+  rate_ratio = safe_rate_for_log / safe_k
+  positive_ratio = rate_ratio > lax._const(k, 0.0)
+  safe_ratio = jnp.where(positive_ratio, rate_ratio, lax._const(k, 1.0))
+  log_ratio = jnp.where(
+      positive_ratio, lax.log(safe_ratio),
+      lax.log(safe_rate_for_log) - lax.log(safe_k))
+  far_tail_log_pmf = safe_k * log_ratio + delta - log_normalizer
   log_pmf = jnp.where(use_far_tail, far_tail_log_pmf, near_mean_log_pmf)
   result = jnp.where(k == 0, -lam, log_pmf)
   # An invalid negative rate must not produce a positive log-probability
