@@ -858,6 +858,27 @@ class DistributionsTest(RandomTestBase):
     self.assertAllClose(eager, expected, rtol=1e-6, atol=5e-5)
     self.assertAllClose(compiled, expected, rtol=1e-5, atol=5e-4)
 
+  def testPoissonLogPmfTinyRateGradientsRemainFinite(self):
+    # Inactive log1p(-1) and log(0) branches used to contaminate
+    # reverse-mode differentiation, even when the returned PMF was correct.
+    for mu in [0.0, 1e-12, 1e-8, 1e-5]:
+      for k in [0.0, 1.0, 2.0]:
+        rate = jnp.float32(mu)
+        logpmf = lambda r: _poisson_log_pmf(jnp.float32(k), r)
+        value = np.asarray(logpmf(rate))
+        scipy_value = scipy.stats.poisson.logpmf(k, mu)
+        self.assertAllClose(value, scipy_value, rtol=2e-6,
+                            atol=2e-5, check_dtypes=False)
+        if mu == 0.0 and k > 0:
+          self.assertTrue(np.isneginf(value))
+          continue
+        expected_grad = np.float32(-1.0 if k == 0 else k / mu - 1.0)
+        gradient = np.asarray(jax.grad(logpmf)(rate))
+        gradient_jit = np.asarray(jax.jit(jax.grad(logpmf))(rate))
+        self.assertTrue(np.isfinite(gradient))
+        np.testing.assert_allclose(gradient, expected_grad, rtol=3e-5)
+        np.testing.assert_allclose(gradient_jit, expected_grad, rtol=3e-5)
+
   def testPoissonLargeLambdaVariance(self):
     lam = 1e8
     samples = np.asarray(
