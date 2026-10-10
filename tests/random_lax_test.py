@@ -834,7 +834,8 @@ class DistributionsTest(RandomTestBase):
     # k - lam = O(sqrt(lam)), even after the leading Stirling rewrite.
     # Compare at the exact float32 representable k values.
     center = jnp.float32(lam)
-    offsets = jnp.asarray([-5.0, -3.0, -1.0, 0.0, 1.0, 3.0, 5.0])
+    offsets = jnp.asarray(
+        [-5.0, -3.0, -1.0, 0.0, 1.0, 3.0, 5.0], dtype=center.dtype)
     k = center + offsets * jnp.sqrt(center)
     expected = scipy.stats.poisson.logpmf(
         np.asarray(k, dtype=np.float64), float(np.float32(lam)))
