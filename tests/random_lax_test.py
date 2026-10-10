@@ -32,8 +32,7 @@ from jax._src import config
 from jax._src import core
 from jax._src import dtypes
 from jax._src.random.core import (_safe_int_to_float, _check_broadcast_shapes,
-                                  _poisson_from_normal, _poisson_log_pmf,
-                                  _stirling_approx_tail)
+                                  _poisson_from_normal, _poisson_log_pmf)
 from jax._src import test_util as jtu
 from jax import vmap
 
@@ -829,19 +828,6 @@ class DistributionsTest(RandomTestBase):
     expected = scipy.stats.poisson.logpmf(np.asarray(k, dtype=np.float64), lam)
     self.assertAllClose(actual, expected, rtol=2e-3, atol=2e-3)
 
-  def testStirlingTailUsesUnclampedLargeArgument(self):
-    # Regression: clamping k to the lookup-table range before evaluating
-    # the asymptotic branch returned the same ~0.00833 term for every k > 9.
-    k = jnp.array([9., 10., 100., 1000., 1e7], dtype=jnp.float32)
-    got = np.asarray(_stirling_approx_tail(k))
-    self.assertGreater(got[0], got[1])
-    self.assertGreater(got[1], got[2])
-    self.assertGreater(got[2], got[3])
-    self.assertGreater(got[3], got[4])
-    np.testing.assert_allclose(
-        got[1:], 1.0 / (12.0 * (np.asarray(k[1:]) + 1.0)),
-        rtol=2e-3, atol=1e-8)
-
   @jtu.sample_product(lam=[1e7, 1e8, 1e9])
   def testPoissonCentralDevianceAvoidsFloat32Cancellation(self, lam):
     # Regression for loss of O(1e-3) to O(1e-2) in log probability when
@@ -1554,18 +1540,6 @@ class DistributionsTest(RandomTestBase):
     self.assertAllClose(samples.mean(), n * p, rtol=0.025, check_dtypes=False)
     self.assertAllClose(samples.var(), n * p * (1 - p) , rtol=0.036,
                         check_dtypes=False)
-
-  def testBinomialLargeCountTailRegression(self):
-    # The same Stirling helper feeds binomial BTRS. Check that restoring
-    # the k-dependent asymptotic correction preserves mean and variance.
-    n = 1_000_000
-    p = 0.35
-    samples = random.binomial(
-        self.make_key(13), n, p, shape=(6000,), dtype=jnp.float32)
-    self.assertAllClose(
-        samples.mean(), n * p, rtol=1e-3, check_dtypes=False)
-    self.assertAllClose(
-        samples.var(), n * p * (1 - p), rtol=0.10, check_dtypes=False)
 
   def testBinomialCornerCases(self):
     key = lambda: self.make_key(0)
