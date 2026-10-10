@@ -25,4 +25,4 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e . scipy pytest absl-py
       - name: Student-t regression
-        run: python -m pytest tests/scipy_stats_test.py -k TLogPdfLargeDf -q
+        run: python -m pytest tests/scipy_stats_test.py -k "TLogPdfLargeDf or TLogPdfExtremeScale" -q
