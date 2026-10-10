@@ -1981,8 +1981,10 @@ def _poisson_log_pmf(k, lam):
       _stirling_approx_tail(safe_k - lax._const(k, 1.0)),
       asymptotic_stirling_tail,
   )
+  # Log each factor separately: 2*pi*k can overflow float32 for
+  # finite k close to the dtype maximum, while log(k) stays finite.
   log_normalizer = (
-      0.5 * lax.log(lax._const(k, 2 * np.pi) * safe_k)
+      0.5 * (lax.log(safe_k) + lax._const(k, np.log(2 * np.pi)))
       + stirling_tail
   )
   near_mean_log_pmf = deviance - log_normalizer
