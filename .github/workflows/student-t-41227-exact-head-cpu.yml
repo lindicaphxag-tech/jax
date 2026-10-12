@@ -1,0 +1,64 @@
+name: Student-t #41227 exact-HEAD CPU numerical review
+
+on:
+  push:
+    branches:
+      - validation/student-t-41227-exact-head-20261013
+    paths:
+      - .github/workflows/student-t-41227-exact-head-cpu.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-student-t:
+    name: Python ${{ matrix.python }} / JAX_ENABLE_X64=${{ matrix.x64 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+        x64: ["0", "1"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/t-logpdf-large-df-41203
+          persist-credentials: false
+      - name: Fail closed if exact reviewed PR source has changed
+        run: |
+          actual="$(git rev-parse HEAD)"
+          expected="15587ac8fcdc042808c9289eae7d12c51504f5a7"
+          echo "Native JAX source HEAD: $actual"
+          echo "Frozen review HEAD: $expected"
+          test "$actual" = "$expected"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install native editable HEAD and JAX unit-test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -U pip
+          python -m pip install --disable-pip-version-check -e ".[cpu]"
+          python -m pip install --disable-pip-version-check \
+            absl-py cloudpickle filelock flatbuffers hypothesis \
+            "mpmath>=1.4.1" pillow portpicker pytest pytest-xdist rich
+      - name: Check source identity, backend and full Student-t cases
+        env:
+          JAX_ENABLE_X64: ${{ matrix.x64 }}
+          JAX_PLATFORMS: cpu
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python - <<'PY'
+          import jax, jaxlib, scipy
+          from pathlib import Path
+          print("JAX source", Path(jax.__file__).resolve())
+          print("JAX version", jax.__version__)
+          print("jaxlib", jaxlib.__version__)
+          print("SciPy", scipy.__version__)
+          print("Backend", jax.default_backend())
+          assert jax.default_backend() == "cpu"
+          assert Path(jax.__file__).resolve().is_relative_to(Path.cwd())
+          PY
+          python -m pytest -q tests/scipy_stats_test.py -k TLogPdf \
+            --maxfail=1 --disable-warnings
