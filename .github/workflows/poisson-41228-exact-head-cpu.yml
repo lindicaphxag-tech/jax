@@ -1,0 +1,64 @@
+name: Poisson #41228 exact-HEAD CPU numerical review
+
+on:
+  push:
+    branches:
+      - validation/poisson-41228-exact-head-20261013
+    paths:
+      - .github/workflows/poisson-41228-exact-head-cpu.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-poisson:
+    name: Python ${{ matrix.python }} / JAX_ENABLE_X64=${{ matrix.x64 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            x64: "0"
+          - python: "3.13"
+            x64: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/poisson-large-lambda-41202
+          persist-credentials: false
+      - name: Verify reviewed JAX #41228 source exactly
+        run: |
+          actual="$(git rev-parse HEAD)"
+          expected="e35e827ec7cf71c6534accd1065575075d3077c4"
+          echo "Exact source: $actual"
+          test "$actual" = "$expected"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install editable JAX HEAD and native numerical test requirements
+        run: |
+          python -m pip install --disable-pip-version-check -U pip
+          python -m pip install --disable-pip-version-check -e ".[cpu]"
+          python -m pip install --disable-pip-version-check \
+            absl-py cloudpickle filelock flatbuffers hypothesis \
+            "mpmath>=1.4.1" pillow portpicker pytest pytest-xdist rich
+      - name: Native Poisson sampler + public stats parity tests
+        env:
+          JAX_ENABLE_X64: ${{ matrix.x64 }}
+          JAX_PLATFORMS: cpu
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python - <<'PY'
+          import jax, jaxlib
+          from pathlib import Path
+          print("source", Path(jax.__file__).resolve())
+          print("jaxlib", jaxlib.__version__)
+          assert jax.default_backend() == "cpu"
+          assert Path(jax.__file__).resolve().is_relative_to(Path.cwd())
+          PY
+          python -m pytest -q tests/random_lax_test.py tests/scipy_stats_test.py \
+            -k "PoissonLargeLambda or PoissonCentralDeviance or PoissonLogPmf or PoissonRejectionLogPmf" \
+            --maxfail=1 --disable-warnings
