@@ -29,7 +29,7 @@ jobs:
       - name: Fail closed if exact reviewed PR source has changed
         run: |
           actual="$(git rev-parse HEAD)"
-          expected="15587ac8fcdc042808c9289eae7d12c51504f5a7"
+          expected="99a6ffe26ca7846f1af676d339e25abb5ff74693"
           echo "Native JAX source HEAD: $actual"
           echo "Frozen review HEAD: $expected"
           test "$actual" = "$expected"
