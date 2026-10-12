@@ -1,0 +1,47 @@
+name: JAX Student-t upstream-baseline compile-cache control
+
+on:
+  push:
+    branches:
+      - validation/student-t-upstream-baseline-20261013
+    paths:
+      - .github/workflows/student-t-upstream-baseline-cpu.yml
+
+permissions:
+  contents: read
+
+jobs:
+  baseline-native:
+    name: Baseline Python ${{ matrix.python }} / X64=${{ matrix.x64 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            x64: "0"
+          - python: "3.13"
+            x64: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: jax-ml/jax
+          ref: 3efa22e9ad80b798c8e24d7b4c4b15b283dab734
+          persist-credentials: false
+      - name: Freeze source baseline
+        run: test "$(git rev-parse HEAD)" = "3efa22e9ad80b798c8e24d7b4c4b15b283dab734"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Same JAX native requirements as candidate
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[cpu]"
+          python -m pip install absl-py cloudpickle filelock flatbuffers hypothesis "mpmath>=1.4.1" pillow portpicker pytest pytest-xdist rich
+      - name: Same existing _CompileAndCheck test (no candidate patch)
+        env:
+          JAX_ENABLE_X64: ${{ matrix.x64 }}
+          JAX_PLATFORMS: cpu
+        run: |
+          python -m pytest -q tests/scipy_stats_test.py -k "TLogPdf0" --maxfail=1 --disable-warnings
