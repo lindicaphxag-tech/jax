@@ -1,0 +1,36 @@
+name: Poisson logpmf and sampler prereview exact-head CPU verification
+on:
+  push:
+    branches: ["validation/poisson-pr41228-exact-20261013"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-source-cpu:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify EXACT original upstream PR head precedes only this validation workflow
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "e35e827ec7cf71c6534accd1065575075d3077c4"
+          git show --format=%H --no-patch HEAD^
+      - name: Install JAX source, pinned compatible jaxlib and upstream test dependencies
+        run: python -m pip install --disable-pip-version-check -e ".[ci]" pytest absl-py hypothesis parameterized
+      - name: Print exact source and runtime versions
+        run: python -c "import jax,jaxlib,scipy; print('jax',jax.__version__,'jaxlib',jaxlib.__version__,'scipy',scipy.__version__)"
+      - name: Execute real PR numerical correctness, eager/JIT and differentiation regressions
+        env:
+          JAX_ENABLE_X64: "1"
+          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+        run: python -m pytest -q tests/scipy_stats_test.py tests/random_lax_test.py -k "PoissonLargeLambdaLogPmf or PoissonRejectionLogPmfMatchesScipy or PoissonCentralDevianceAvoidsFloat32Cancellation or PoissonLargeLambdaVariance or PoissonLogPmfTinyRateGradientsRemainFinite or PoissonCentralLogPmfNearFloat32Maximum or PoissonLogPmfLargeLambda or PoissonLogPmfCentralFloat32Accurate or PoissonLogPmfLargeCountFarTailFloat32 or PoissonLogPmfPublicApiTinyRateAutodiff or PoissonLogPmfTinyRateSecondDerivative or PoissonLogPmfTinyRateFarTail" -ra
