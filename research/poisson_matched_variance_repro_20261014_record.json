@@ -1,0 +1,26 @@
+{
+  "jax_version": "0.9.0.1",
+  "python": "3.13",
+  "cpu_backend": "cpu",
+  "experimental_limitation": "Independent author-side test on installed JAX 0.9.0.1, NOT the exact current PR 41228 source on JAX 0.11.2",
+  "per_rate": {
+    "1000000": {
+      "n_sample": 25000,
+      "original_variance_ratio": 1.0172746492163287,
+      "patched_variance_ratio": 1.0092246232893651,
+      "original_equals_patched_fraction": 0.44176
+    },
+    "10000000": {
+      "n_sample": 25000,
+      "original_variance_ratio": 0.9713587175171046,
+      "patched_variance_ratio": 1.0087526985931456,
+      "original_equals_patched_fraction": 0.062
+    },
+    "100000000": {
+      "n_sample": 25000,
+      "original_variance_ratio": 1.4585319452388041,
+      "patched_variance_ratio": 1.0087862355555641,
+      "original_equals_patched_fraction": 0.58276
+    }
+  }
+}
