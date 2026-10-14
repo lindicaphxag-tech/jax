@@ -1,0 +1,38 @@
+name: Matched-key Poisson numerical evidence (JAX 0.9.0.1)
+on:
+  push:
+    branches: [evidence/matched-poisson-variance-20261014]
+    paths:
+      - research/poisson_matched_variance_repro_20261014.py
+      - .github/workflows/poisson-matched-variance-evidence-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  standalone-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --disable-pip-version-check 'jax[cpu]==0.9.0.1' numpy scipy
+      - name: Run original vs patched same-key CPU acceptance formula
+        run: python research/poisson_matched_variance_repro_20261014.py > /tmp/jax_poisson_matched.json
+      - name: Check material original bug and corrected variance (statistical control)
+        shell: python
+        run: |
+          import json
+          x=json.load(open('/tmp/jax_poisson_matched.json'))
+          assert x['jax_version']=='0.9.0.1' and x['cpu_backend']=='cpu'
+          rates=x['per_rate']
+          assert all(v['n_samples']==25000 for v in rates.values())
+          big=rates['100000000']
+          assert big['original_variance_ratio']>1.30
+          assert .95<big['stable_variance_ratio']<1.05
+          print(json.dumps(big,indent=2))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jax-poisson-matched-evidence-jax-0.9.0.1
+          path: /tmp/jax_poisson_matched.json
