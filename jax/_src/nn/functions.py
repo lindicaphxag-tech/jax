@@ -125,6 +125,7 @@ def squareplus(x: ArrayLike, b: ArrayLike = 4) -> Array:
   y = x + jnp.sqrt(jnp.square(x) + b)
   return y / 2
 
+@custom_derivatives.custom_jvp
 @api.jit
 def softplus(x: ArrayLike) -> Array:
   r"""Softplus activation function.
@@ -138,6 +139,15 @@ def softplus(x: ArrayLike) -> Array:
     x : input array
   """
   return jnp.logaddexp(x, 0)
+
+# The usual sigmoid(x) derivative rounds to exactly one in the positive
+# tail. Differentiating that rounded value incorrectly gives a zero Hessian,
+# although the true curvature sigmoid(x) * sigmoid(-x) is representable.
+# exp(-softplus(-x)) is the same first derivative, but keeps its small
+# unsaturated factor in the differentiated computation.
+softplus.defjvps(
+    lambda g, ans, x: lax.mul(g, lax.exp(lax.neg(softplus(lax.neg(x)))))
+)
 
 @api.jit
 def sparse_plus(x: ArrayLike) -> Array:
