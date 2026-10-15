@@ -4787,8 +4787,15 @@ mlir.register_lowering(exp_p, partial(_nary_lower_hlo, hlo.exponential))
 core.pp_eqn_rules[exp_p] = _unary_with_accuracy_pp_rule
 
 exp2_p = standard_unop(_float | _complex, 'exp2')
+# The primal 2**x can overflow before ln(2) * 2**x does. Instead of
+# multiplying the already-overflowed primal, use the mathematically equal
+# (2 * ln(2)) * 2**(x - 1). The integer exponent shift stays exact near
+# the overflow boundary, unlike a fractional log2(ln(2)) shift.
 ad.defjvp2(
-    exp2_p, lambda g, ans, x, **kwargs: mul(log(_const(x, 2)), mul(g, ans))
+    exp2_p,
+    lambda g, ans, x, **kwargs: mul(
+        g, mul(_const(x, 2 * math.log(2)), exp2(sub(x, _const(x, 1))))
+    ),
 )
 
 def _exp2_lower(ctx, x, accuracy):
