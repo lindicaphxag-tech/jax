@@ -3391,7 +3391,6 @@ def array_split(ary: ArrayLike, indices_or_sections: int | Sequence[int] | Array
 
 
 @export
-@api.jit
 def clip(
   arr: ArrayLike | None = None,
   /,
@@ -3425,6 +3424,25 @@ def clip(
     >>> jnp.clip(arr, 2, 5)
     Array([2, 2, 2, 3, 4, 5, 5, 5], dtype=int32)
   """
+  # JIT normally canonicalizes Python integers to signed int64 before
+  # entering the traced function. uint64 clip limits in (2**63, 2**64) are
+  # valid but do not fit in int64, so represent only these limits explicitly
+  # as uint64 before crossing the JIT argument boundary.
+  if (getattr(arr, "dtype", None) == np.dtype("uint64") and
+      dtypes.canonicalize_dtype(np.uint64) == np.dtype("uint64")):
+    if isinstance(min, int) and (1 << 63) <= min < (1 << 64):
+      min = asarray(min, dtype=np.uint64)
+    if isinstance(max, int) and (1 << 63) <= max < (1 << 64):
+      max = asarray(max, dtype=np.uint64)
+  return _clip_impl(arr, min, max)
+
+
+@api.jit
+def _clip_impl(
+  arr: ArrayLike | None,
+  min: ArrayLike | None,
+  max: ArrayLike | None,
+) -> Array:
   if arr is None:
     raise ValueError("No input was provided to the clip function.")
 

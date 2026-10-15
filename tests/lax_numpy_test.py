@@ -858,6 +858,32 @@ class LaxBackedNumpyTests(jtu.JaxTestCase):
     self._CheckAgainstNumpy(np_fun, jnp_fun, args_maker, check_dtypes=False)
     self._CompileAndCheck(jnp_fun, args_maker)
 
+  def testClipUnsigned64PythonBoundsBeyondInt64(self):
+    # Regression for https://github.com/jax-ml/jax/issues/34455.
+    with jax.enable_x64():
+      raw = [0, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]
+      a = jnp.asarray(raw, dtype=jnp.uint64)
+      np_a = np.asarray(raw, dtype=np.uint64)
+      for lo, hi in [
+          (0, 1 << 63),
+          (0, (1 << 64) - 1),
+          (1 << 63, (1 << 64) - 1),
+          ((1 << 63) + 5, (1 << 63) + 10),
+      ]:
+        expected = np.clip(np_a, np.uint64(lo), np.uint64(hi))
+        self.assertArraysEqual(jnp.clip(a, min=lo, max=hi), expected)
+        self.assertArraysEqual(
+            jax.jit(lambda x: jnp.clip(x, min=lo, max=hi))(a),
+            expected,
+        )
+
+      # Existing low-range integer bounds should retain their behavior.
+      self.assertArraysEqual(
+          jnp.clip(a, min=0, max=7),
+          np.clip(np_a, np.uint64(0), np.uint64(7)),
+      )
+
+
   @jtu.sample_product(
     shape=all_shapes,
     dtype=default_dtypes + unsigned_dtypes,
