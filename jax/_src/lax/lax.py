@@ -4787,8 +4787,14 @@ mlir.register_lowering(exp_p, partial(_nary_lower_hlo, hlo.exponential))
 core.pp_eqn_rules[exp_p] = _unary_with_accuracy_pp_rule
 
 exp2_p = standard_unop(_float | _complex, 'exp2')
+# The primal 2**x can overflow before ln(2) * 2**x does. In the
+# JVP, shift the exponent by log2(ln(2)) instead of multiplying the
+# already-overflowed primal; this keeps representable derivatives finite.
 ad.defjvp2(
-    exp2_p, lambda g, ans, x, **kwargs: mul(log(_const(x, 2)), mul(g, ans))
+    exp2_p,
+    lambda g, ans, x, **kwargs: mul(
+        g, exp2(add(x, _const(x, math.log2(math.log(2)))))
+    ),
 )
 
 def _exp2_lower(ctx, x, accuracy):
