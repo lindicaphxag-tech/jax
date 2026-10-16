@@ -903,9 +903,20 @@ def choice(key: Key | ArrayLike,  # TODO(jakevdp): make this Key
           "p must be None or a 1D vector with the same size as a.shape[axis]. "
           f"p has shape {p_arr.shape} and a.shape[axis] is {n_inputs}.")
     if replace:
-      p_cuml = jnp.cumsum(p_arr)
+      # Build the cumulative distribution only over nonzero-probability entries.
+      # Parallel cumsum can introduce tiny artificial increments at exact zeros,
+      # which can make searchsorted sample an element outside the distribution's
+      # support. Compacting the support keeps zero-probability choices impossible
+      # while retaining the existing cumulative-sampling algorithm.
+      nonzero_indices = jnp.nonzero(p_arr != 0, size=n_inputs, fill_value=0)[0]
+      nonzero_count = jnp.count_nonzero(p_arr)
+      nonzero_probs = p_arr[nonzero_indices]
+      positions = jnp.arange(n_inputs)
+      nonzero_probs = jnp.where(positions < nonzero_count, nonzero_probs, 0)
+      p_cuml = jnp.cumsum(nonzero_probs)
+      p_cuml = jnp.where(positions < nonzero_count, p_cuml, p_cuml[-1])
       r = p_cuml[-1] * (1 - uniform(key, shape, dtype=p_cuml.dtype))
-      ind = jnp.searchsorted(p_cuml, r).astype(int)
+      ind = nonzero_indices[jnp.searchsorted(p_cuml, r)].astype(int)
     else:
       # Gumbel top-k trick: https://timvieira.github.io/blog/post/2019/09/16/algorithms-for-sampling-without-replacement/
       g = gumbel(key, (n_inputs,), dtype=p_arr.dtype, mode=mode) + jnp.log(p_arr)
