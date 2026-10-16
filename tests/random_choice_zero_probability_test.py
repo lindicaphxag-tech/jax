@@ -2,20 +2,30 @@ from absl.testing import absltest
 
 import numpy as np
 
+import jax.numpy as jnp
 from jax import random
+from jax import scipy as jsp
 from jax._src import test_util as jtu
 
 
 class ChoiceZeroProbabilityTest(jtu.JaxTestCase):
 
   def test_zero_probability_entries_are_never_sampled(self):
-    n = 100_000
+    # Reduced from the reported million-element failure mode: a long softmax
+    # distribution followed by an exact zero-probability tail can acquire
+    # artificial cumulative mass at the zero entries under parallel cumsum.
+    n = 1_000_000
     zero_tail = 10_000
-    probs = np.ones(n, dtype=np.float32)
-    probs[-zero_tail:] = 0
+    key = random.key(100)
+    logits = random.normal(key, (n,), dtype=np.float32)
+    logits = logits.at[-zero_tail:].set(-jnp.inf)
+    probs = jnp.exp(logits - jsp.special.logsumexp(logits))
 
-    samples = np.asarray(random.choice(
-        random.key(0), n, shape=(100_000,), replace=True, p=probs))
+    samples = np.asarray(
+        random.choice(
+            random.key(101), n, shape=(100_000,), replace=True, p=probs
+        )
+    )
 
     self.assertEqual(np.intersect1d(samples, np.arange(n - zero_tail, n)).size, 0)
 
