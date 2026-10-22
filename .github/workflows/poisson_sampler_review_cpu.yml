@@ -1,0 +1,49 @@
+name: Poisson source-exact sampler reviewer benchmark (CPU)
+on:
+  pull_request:
+    paths:
+      - "ci/poisson_native_sampler_review_benchmark.py"
+      - "ci/poisson_central_deviance_remainder_certificate.py"
+      - "jax/_src/random/core.py"
+      - ".github/workflows/poisson_sampler_review_cpu.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  poisson-benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install matched local JAX and CPU jaxlib
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[ci]" scipy
+      - name: Display imported source and CPU backend
+        run: |
+          python -c "import jax; from jax._src.random import core; print(jax.__version__, core.__file__, jax.devices())"
+      - name: Certify bounded central deviance polynomial truncation
+        if: runner.os == 'Linux'
+        run: python ci/poisson_central_deviance_remainder_certificate.py
+      - name: Run exact-source pre/post Hoermann sampler timing and accuracy
+        run: python ci/poisson_native_sampler_review_benchmark.py
+      - name: Targeted native public Poisson tests
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install pytest absl-py parameterized
+          python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmf'
+          python -m pytest tests/random_lax_test.py -q -k 'PoissonLargeLambdaVariance'
+      - name: Upload numerical benchmark record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poisson-review-${{ matrix.os }}
+          path: poisson_sampler_benchmark.json
+          if-no-files-found: ignore
