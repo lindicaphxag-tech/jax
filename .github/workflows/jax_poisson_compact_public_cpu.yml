@@ -25,5 +25,9 @@ jobs:
           ruff check tests/scipy_stats_test.py
       - name: Public Poisson log-PMF and JIT correctness
         run: python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmf'
+      - name: Float64-enabled central Poisson accuracy matrix
+        env:
+          JAX_ENABLE_X64: "true"
+        run: python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmfCentralAccuracy'
       - name: Exact-sampler large-lambda distribution regression
         run: python -m pytest tests/random_lax_test.py -q -k 'PoissonLargeLambdaVariance'
