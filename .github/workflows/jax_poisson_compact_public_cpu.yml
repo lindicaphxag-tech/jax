@@ -29,5 +29,7 @@ jobs:
         env:
           JAX_ENABLE_X64: "true"
         run: python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmfCentralAccuracy'
+      - name: Complete native Poisson-focused API and random sampling tests
+        run: python -m pytest tests/scipy_stats_test.py tests/random_lax_test.py -q -k 'Poisson'
       - name: Exact-sampler large-lambda distribution regression
         run: python -m pytest tests/random_lax_test.py -q -k 'PoissonLargeLambdaVariance'
