@@ -65,18 +65,26 @@ def source_matched_legacy_rejection():
   return jax.jit(globals_ns[func.name], static_argnums=(2, 3, 4))
 
 
-def median_seconds(fn, key, lam, n, repeats=7):
-  # Do not count compilation, transfer or asynchronous launches as execution.
+def paired_medians(base, patch, key, lam, n, repeats=15):
+  # Interleave and reverse order to reduce JIT warmup, thermal and drift bias.
   shape = (n,)
   dtype = np.dtype("int32")
   max_iters = int(np.iinfo(np.int32).max)
-  fn(key, lam, shape, dtype, max_iters).block_until_ready()
-  times = []
-  for _ in range(repeats):
-    t0 = time.perf_counter()
+  fns = (base, patch)
+  for fn in fns:
     fn(key, lam, shape, dtype, max_iters).block_until_ready()
-    times.append(time.perf_counter() - t0)
-  return statistics.median(times)
+  series = [[], []]
+  for i in range(repeats):
+    order = (0, 1) if i % 2 == 0 else (1, 0)
+    for idx in order:
+      t0 = time.perf_counter()
+      fns[idx](key, lam, shape, dtype, max_iters).block_until_ready()
+      series[idx].append(time.perf_counter() - t0)
+  return statistics.median(series[0]), statistics.median(series[1]), {
+      "min_ms": [round(min(x) * 1000, 5) for x in series],
+      "max_ms": [round(max(x) * 1000, 5) for x in series],
+      "repeats": repeats,
+  }
 
 
 def main():
@@ -89,14 +97,14 @@ def main():
   for mean in (10.0, 1000.0, 1e8):
     for n in (1024, 8192):
       rates = jnp.full((n,), mean, dtype=jnp.float32)
-      old_s = median_seconds(baseline, key, rates, n)
-      new_s = median_seconds(new, key, rates, n)
+      old_s, new_s, spread = paired_medians(baseline, new, key, rates, n)
       row = {
           "lambda": mean,
           "n": n,
           "baseline_ms": round(old_s * 1000, 5),
           "patch_ms": round(new_s * 1000, 5),
           "slowdown": round(new_s / old_s, 4),
+          "span": spread,
       }
       result.append(row)
       print("TIMING", json.dumps(row, sort_keys=True), flush=True)
