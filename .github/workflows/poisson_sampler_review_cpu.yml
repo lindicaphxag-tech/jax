@@ -30,6 +30,12 @@ jobs:
           python -c "import jax; from jax._src.random import core; print(jax.__version__, core.__file__, jax.devices())"
       - name: Run exact-source pre/post Hoermann sampler timing and accuracy
         run: python ci/poisson_native_sampler_review_benchmark.py
+      - name: Targeted native public Poisson tests
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install pytest absl-py parameterized
+          python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmf'
+          python -m pytest tests/random_lax_test.py -q -k 'PoissonLargeLambdaVariance'
       - name: Upload numerical benchmark record
         if: always()
         uses: actions/upload-artifact@v4
