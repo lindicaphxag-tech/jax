@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "ci/poisson_native_sampler_review_benchmark.py"
+      - "ci/poisson_central_deviance_remainder_certificate.py"
       - "jax/_src/random/core.py"
       - ".github/workflows/poisson_sampler_review_cpu.yml"
   workflow_dispatch:
@@ -28,6 +29,9 @@ jobs:
       - name: Display imported source and CPU backend
         run: |
           python -c "import jax; from jax._src.random import core; print(jax.__version__, core.__file__, jax.devices())"
+      - name: Certify bounded central deviance polynomial truncation
+        if: runner.os == 'Linux'
+        run: python ci/poisson_central_deviance_remainder_certificate.py
       - name: Run exact-source pre/post Hoermann sampler timing and accuracy
         run: python ci/poisson_native_sampler_review_benchmark.py
       - name: Targeted native public Poisson tests
