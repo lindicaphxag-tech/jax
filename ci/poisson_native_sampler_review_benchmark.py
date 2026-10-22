@@ -50,12 +50,14 @@ def source_matched_legacy_rejection():
           and node.value.func.id == "_poisson_log_pmf"
       ):
         self.count += 1
-        original = ast.parse("t = -lam + k * lax.log(lam) - lax.lgamma(k + 1)").body[0]
+        original = ast.parse("t = -lam + k * log_lam - lax_special.lgamma(k + 1)").body[0]
         return ast.copy_location(original, node)
       return self.generic_visit(node)
 
   transform = RevertLogPmf()
   func = transform.visit(func)
+  # Restore the original per-function, pre-loop log(lambda) hoist as well.
+  func.body.insert(1, ast.parse("log_lam = lax.log(lam)").body[0])
   assert transform.count == 1, "Production source no longer has the expected one-line log-PMF substitution"
   module = ast.fix_missing_locations(ast.Module(body=[func], type_ignores=[]))
   globals_ns = vars(core).copy()
