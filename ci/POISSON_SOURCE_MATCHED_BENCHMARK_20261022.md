@@ -25,18 +25,23 @@ not an upstream algorithm patch, no claims of measured GPU speedups.
 
 ## Observed median timings (patch / original; lower is better)
 
-| lambda | samples | Ubuntu | Windows |
-|---:|---:|---:|---:|
-| 10 | 1,024 | 0.526 | 0.626 |
-| 10 | 8,192 | 0.589 | 0.607 |
-| 1,000 | 1,024 | 0.556 | 0.626 |
-| 1,000 | 8,192 | 0.591 | 0.594 |
-| 100,000,000 | 1,024 | 0.838 | 0.936 |
-| 100,000,000 | 8,192 | 0.964 | 0.935 |
+| lambda | samples | Ubuntu | Windows | macOS |
+|---:|---:|---:|---:|---:|
+| 10 | 1,024 | 0.526 | 0.626 | 0.603 |
+| 10 | 8,192 | 0.589 | 0.607 | 0.738 |
+| 1,000 | 1,024 | 0.556 | 0.626 | 0.656 |
+| 1,000 | 8,192 | 0.591 | 0.594 | 0.769 |
+| 100,000,000 | 1,024 | 0.838 | 0.936 | 0.944 |
+| 100,000,000 | 8,192 | 0.964 | 0.935 | 1.003 |
 
-Ubuntu and Windows jobs completed successfully. The macOS job was
-**still queued when this report was prepared**; do not portray the entire
-matrix as successful until it completes.
+The original 15-pair CPU benchmark completed on all three operating systems,
+including macOS, in [GitHub Actions 39816810530](https://github.com/lindicaphxag-tech/jax/actions/runs/39816810530).
+The numbers above combine an earlier Ubuntu/Windows successful matrix and
+the later macOS result; the rerun also passed on all three platforms.
+Cross-run variance (including an earlier Ubuntu 1.43x observation at the
+largest rate/shape) prevents an unconditional speedup/no-regression claim.
+The same fixed seeds across operating systems are consistency checks,
+**not independent Monte Carlo replicates**.
 
 Each runner installed checked-out JAX 0.12.0.dev20261022 with CPU jaxlib
 0.11.2. JAX's public SciPy Poisson oracle spot-check at lambda 1e8 passed:
