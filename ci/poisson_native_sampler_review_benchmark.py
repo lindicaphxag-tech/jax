@@ -88,36 +88,41 @@ def paired_medians(base, patch, key, lam, n, repeats=15):
 
 
 
-def empirical_sampler_comparison(base, patch):
-  """Predeclared paired-seed distribution diagnostics, not tuned to the result.
+def empirical_sampler_comparison(base, patch, *, split, seed_start, num_seeds, means):
+  """Fixed disjoint-seed confirmation, reporting per-seed uncertainty.
 
-  Both native sampling methods receive the same keys and inputs. The Poisson
-  standardized law is near normal for these very large rates; we also report
-  empirical moments against exact Poisson mean and variance. The standard
-  normal KS diagnostic is a quality check, not an exact Poisson GOF p-value.
+  The normal CDF is an asymptotic diagnostic for Poisson at large lambda,
+  not an exact Poisson goodness-of-fit p-value. Every reported configuration
+  and seed is executed for both methods; no best-case selection.
   """
   result=[]
   n=8192
   shape=(n,)
   dtype=np.dtype("int32")
   max_iters=int(np.iinfo(np.int32).max)
-  for mean in (1e6, 1e8):
+  for mean in means:
     lam=jnp.full(shape,mean,dtype=jnp.float32)
     arrays=[[],[]]
-    for seed in range(8):
-      key=jax.random.key(16000+seed)
+    for seed in range(seed_start,seed_start+num_seeds):
+      key=jax.random.key(seed)
       arrays[0].append(np.asarray(base(key,lam,shape,dtype,max_iters),dtype=np.float64))
       arrays[1].append(np.asarray(patch(key,lam,shape,dtype,max_iters),dtype=np.float64))
     old,cur=(np.concatenate(samples) for samples in arrays)
     measured=[]
-    for tag,x in (("original",old),("stable",cur)):
+    for method,x,blocks in (("original",old,arrays[0]),("stable",cur,arrays[1])):
       standardized=(x-mean)/np.sqrt(mean)
       ks=float(scipy.stats.kstest(standardized,scipy.stats.norm.cdf).statistic)
+      block_variances=np.asarray([float(z.var(ddof=1)/mean) for z in blocks])
+      block_standard_error=float(np.std(block_variances,ddof=1)/np.sqrt(num_seeds))
       moments={
-          "method":tag,
+          "method":method,
+          "split":split,
           "count":len(x),
+          "seed_start":seed_start,
+          "num_seeds":num_seeds,
           "mean_error_standard_errors":float((x.mean()-mean)/np.sqrt(mean/len(x))),
           "variance_to_poisson":float(x.var(ddof=1)/mean),
+          "per_seed_variance_ratio_se":block_standard_error,
           "normal_ks":ks,
           "incomplete_fraction":float(np.mean(x<0)),
       }
@@ -125,13 +130,11 @@ def empirical_sampler_comparison(base, patch):
       print("DISTRIBUTION",json.dumps({"lambda":mean,**moments},sort_keys=True),flush=True)
     assert measured[1]["incomplete_fraction"]==0,measured[1]
     assert 0.8<measured[1]["variance_to_poisson"]<1.2,measured[1]
-    row={
-        "lambda":mean,
+    result.append({
+        "split":split, "lambda":mean,
         "same_key_changed_fraction":float(np.mean(old!=cur)),
-        "original":measured[0],
-        "stable":measured[1]
-    }
-    result.append(row)
+        "original":measured[0], "stable":measured[1]
+    })
   return result
 
 
@@ -164,7 +167,12 @@ def main():
   assert np.all(np.isfinite(actual)), actual
   assert max_err < 0.02, (actual, oracle, max_err)
   print("REFERENCE", json.dumps({"abs_logpmf_error_max": max_err}))
-  distribution=empirical_sampler_comparison(baseline,new)
+  distribution=empirical_sampler_comparison(
+      baseline,new,split="pilot",seed_start=16000,num_seeds=8,
+      means=(1e6,1e8))
+  holdout=empirical_sampler_comparison(
+      baseline,new,split="holdout",seed_start=36000,num_seeds=12,
+      means=(1e6,1e7,1e8))
   # A numerical performance ratio is a measurement, not an acceptance criterion
   # or a claim of statistical bias correction.
   with open("poisson_sampler_benchmark.json", "w", encoding="utf-8") as out:
@@ -172,6 +180,7 @@ def main():
         {"jax": jax.__version__, "jaxlib": jax.lib.__version__,
          "device": str(jax.devices()[0]), "results": result,
          "distribution":distribution,
+         "holdout_distribution":holdout,
          "max_logpmf_abs_error": max_err,
          "method": "native_source_ast_single_expression_revert"},
         out, indent=2)
