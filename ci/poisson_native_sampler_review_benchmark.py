@@ -87,6 +87,54 @@ def paired_medians(base, patch, key, lam, n, repeats=15):
   }
 
 
+
+def empirical_sampler_comparison(base, patch):
+  """Predeclared paired-seed distribution diagnostics, not tuned to the result.
+
+  Both native sampling methods receive the same keys and inputs. The Poisson
+  standardized law is near normal for these very large rates; we also report
+  empirical moments against exact Poisson mean and variance. The standard
+  normal KS diagnostic is a quality check, not an exact Poisson GOF p-value.
+  """
+  result=[]
+  n=8192
+  shape=(n,)
+  dtype=np.dtype("int32")
+  max_iters=int(np.iinfo(np.int32).max)
+  for mean in (1e6, 1e8):
+    lam=jnp.full(shape,mean,dtype=jnp.float32)
+    arrays=[[],[]]
+    for seed in range(8):
+      key=jax.random.key(16000+seed)
+      arrays[0].append(np.asarray(base(key,lam,shape,dtype,max_iters),dtype=np.float64))
+      arrays[1].append(np.asarray(patch(key,lam,shape,dtype,max_iters),dtype=np.float64))
+    old,cur=(np.concatenate(samples) for samples in arrays)
+    measured=[]
+    for tag,x in (("original",old),("stable",cur)):
+      standardized=(x-mean)/np.sqrt(mean)
+      ks=float(scipy.stats.kstest(standardized,scipy.stats.norm.cdf).statistic)
+      moments={
+          "method":tag,
+          "count":len(x),
+          "mean_error_standard_errors":float((x.mean()-mean)/np.sqrt(mean/len(x))),
+          "variance_to_poisson":float(x.var(ddof=1)/mean),
+          "normal_ks":ks,
+          "incomplete_fraction":float(np.mean(x<0)),
+      }
+      measured.append(moments)
+      print("DISTRIBUTION",json.dumps({"lambda":mean,**moments},sort_keys=True),flush=True)
+    assert measured[1]["incomplete_fraction"]==0,measured[1]
+    assert 0.8<measured[1]["variance_to_poisson"]<1.2,measured[1]
+    row={
+        "lambda":mean,
+        "same_key_changed_fraction":float(np.mean(old!=cur)),
+        "original":measured[0],
+        "stable":measured[1]
+    }
+    result.append(row)
+  return result
+
+
 def main():
   baseline = source_matched_legacy_rejection()
   new = core._poisson_rejection
@@ -116,12 +164,14 @@ def main():
   assert np.all(np.isfinite(actual)), actual
   assert max_err < 0.02, (actual, oracle, max_err)
   print("REFERENCE", json.dumps({"abs_logpmf_error_max": max_err}))
+  distribution=empirical_sampler_comparison(baseline,new)
   # A numerical performance ratio is a measurement, not an acceptance criterion
   # or a claim of statistical bias correction.
   with open("poisson_sampler_benchmark.json", "w", encoding="utf-8") as out:
     json.dump(
         {"jax": jax.__version__, "jaxlib": jax.lib.__version__,
          "device": str(jax.devices()[0]), "results": result,
+         "distribution":distribution,
          "max_logpmf_abs_error": max_err,
          "method": "native_source_ast_single_expression_revert"},
         out, indent=2)
