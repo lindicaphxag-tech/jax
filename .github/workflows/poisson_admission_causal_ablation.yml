@@ -1,5 +1,8 @@
 name: JAX Poisson batch admission causal control (CPU)
 on:
+  pull_request:
+    branches:
+      - experiment/poisson-batched-central-admission-20261023
   push:
     branches:
       - research/poisson-admission-causal-ablation-20261023
