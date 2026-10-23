@@ -51,7 +51,7 @@ def run():
     with urllib.request.urlopen(SOURCE, timeout=30) as res:
         base = res.read()
     blob = hashlib.sha1(
-        b"blob " + str(len(base)).encode() + b"\\0" + base
+        b"blob " + str(len(base)).encode() + bytes([0]) + base
     ).hexdigest()
     if blob != BLOB_SHA:
         raise AssertionError(f"pinned base blob mismatch: {blob}")
