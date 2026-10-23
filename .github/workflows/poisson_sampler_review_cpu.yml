@@ -1,5 +1,8 @@
 name: Poisson source-exact sampler reviewer benchmark (CPU)
 on:
+  pull_request:
+    branches:
+      - fix/poisson-large-lambda-41202
   push:
     branches:
       - ci/poisson-41228-exacthead-review-20261023
