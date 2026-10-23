@@ -1,0 +1,36 @@
+name: JAX Poisson batch admission causal control (CPU)
+on:
+  push:
+    branches:
+      - research/poisson-admission-causal-ablation-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  causal-ablation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install matched JAX native CPU backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[ci]" scipy pytest absl-py parameterized
+      - name: Verify static Python syntax
+        run: python -m py_compile ci/poisson_admission_causal_ablation.py
+      - name: Source-derived 3-arm score, compilation and mixed-rate A/B
+        run: python ci/poisson_admission_causal_ablation.py
+      - name: Attach raw causal comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poisson-causal-${{ matrix.os }}
+          path: poisson_admission_causal_ablation.json
+          if-no-files-found: ignore
