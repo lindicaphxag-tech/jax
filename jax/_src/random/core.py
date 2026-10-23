@@ -2041,8 +2041,8 @@ def _poisson_rejection_log_pmf(k, lam):
     )
     return deviance - log_normalizer
 
-  return lax.cond(central, central_only,
-                  lambda _: _poisson_log_pmf(k, lam), operand=None)
+  return lax_control_flow.cond(
+      central, central_only, lambda _: _poisson_log_pmf(k, lam), None)
 
 
 @jit(static_argnums=(2, 3, 4))
