@@ -25,7 +25,7 @@ def compare_score_branches():
           np.array([1e8, 1e8 + 1000, 1e8 - 1000, 1e8+1e5], np.float32),
           np.full(4, 1e8, np.float32)),
       "mixed_one_far": (
-          np.array([1e8, 1e8 + 1e6, 1e8 - 1e3, 1e8], np.float32),
+          np.array([1e8, 1e8 + 3e6, 1e8 - 1e3, 1e8], np.float32),
           np.full(4, 1e8, np.float32)),
       "mixed_rate": (
           np.array([15, 1e8, 500, 1e6], np.float32),
@@ -35,6 +35,11 @@ def compare_score_branches():
           np.full(4, 1e8, np.float32)),
   }
   for title, (raw_k, raw_lam) in cases.items():
+    certificate = bool(np.all(
+        (raw_lam >= 1e6) & (raw_k > 10) &
+        (np.abs((raw_k - raw_lam) / np.maximum(raw_k, 1)) <= 0.01)))
+    expected_certificate = (title == "central_exact")
+    assert certificate == expected_certificate, (title, certificate)
     k = jnp.asarray(raw_k)
     lam = jnp.asarray(raw_lam)
     expected = np.asarray(core._poisson_log_pmf(k, lam))
