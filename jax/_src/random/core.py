@@ -1943,8 +1943,14 @@ def _poisson_knuth(key: Key, lam, shape, dtype, max_iters) -> Array:
   return (k - 1).astype(dtype)
 
 
-def _poisson_log_pmf(k, lam):
-  """Stable Poisson log-PMF shared by rejection sampling and scipy.stats."""
+def _poisson_log_pmf(k, lam, *, _sampler_fast_path=False):
+  """Stable Poisson log-PMF shared by rejection sampling and scipy.stats.
+
+  The private sampler-only specialization exploits the _poisson dispatcher's
+  strictly positive rejection-rate invariant (lam >= 10). In particular,
+  lam / max(k, 1) cannot underflow for finite float32/float64 arguments;
+  unlike the public log-PMF it does not need the tiny-rate fallback.
+  """
   # For large lam, evaluating -lam + k * log(lam) - lgamma(k + 1)
   # directly loses all useful digits in float32.  Rewrite the same quantity
   # around k ~= lam and use the Stirling correction already used by BTRS.
@@ -1994,18 +2000,28 @@ def _poisson_log_pmf(k, lam):
   # when lam/k underflows. This also serves the public poisson.logpmf API.
   # k=0 is handled exactly. Mask the inactive log-rate branch so its
   # derivative remains -1 at lam=0.
-  safe_rate_for_log = jnp.where(k == 0, 1.0, lam)
-  rate_ratio = safe_rate_for_log / safe_k
-  positive_ratio = rate_ratio > 0.0
-  safe_ratio = jnp.where(positive_ratio, rate_ratio, 1.0)
-  log_ratio = jnp.where(
-      positive_ratio, lax.log(safe_ratio),
-      lax.log(safe_rate_for_log) - lax.log(safe_k))
+  if _sampler_fast_path:
+    # _poisson passes lam >= 10 into _poisson_rejection, even when the
+    # public rate is below 10; its BTRS count proposals may still be negative.
+    # With finite sampler k, lam/max(k,1) cannot underflow in float32/64.
+    # Avoid the two unnecessary inactive-path logarithms on every rejection
+    # step. The public API retains the zero-rate autodiff-safe fallback below.
+    log_ratio = lax.log(lam / safe_k)
+  else:
+    safe_rate_for_log = jnp.where(k == 0, 1.0, lam)
+    rate_ratio = safe_rate_for_log / safe_k
+    positive_ratio = rate_ratio > 0.0
+    safe_ratio = jnp.where(positive_ratio, rate_ratio, 1.0)
+    log_ratio = jnp.where(
+        positive_ratio, lax.log(safe_ratio),
+        lax.log(safe_rate_for_log) - lax.log(safe_k))
   far_tail_log_pmf = safe_k * log_ratio + delta - log_normalizer
   log_pmf = jnp.where(use_far_tail, far_tail_log_pmf, near_mean_log_pmf)
   result = jnp.where(k == 0, -lam, log_pmf)
   # An invalid negative rate must not produce a positive log-probability
   # at k=0; follow the public SciPy distribution's domain semantics.
+  if _sampler_fast_path:
+    return result
   return jnp.where(lam < 0.0, jnp.nan, result)
 
 
@@ -2029,7 +2045,7 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
 
     k = lax.floor((2 * a / u_shifted + b) * u + lam + 0.43)
     s = lax.log(v * inv_alpha / (a / (u_shifted * u_shifted) + b))
-    t = _poisson_log_pmf(k, lam)
+    t = _poisson_log_pmf(k, lam, _sampler_fast_path=True)
 
     accept1 = (u_shifted >= 0.07) & (v <= v_r)
     reject = (k < 0) | ((u_shifted < 0.013) & (v > u_shifted))
