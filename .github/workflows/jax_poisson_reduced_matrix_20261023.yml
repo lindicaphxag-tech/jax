@@ -1,0 +1,35 @@
+name: JAX Poisson reduced matrix native tests
+on:
+  push:
+    branches:
+      - review/poisson-41228-reduced-matrix-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-poisson:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install matched JAX native test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[ci]" scipy pytest absl-py parameterized ruff
+      - name: Python syntax and repository-native lint
+        run: |
+          python -m py_compile tests/scipy_stats_test.py
+          ruff check tests/scipy_stats_test.py
+      - name: Public Poisson log-PMF and JIT correctness
+        run: python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmf'
+      - name: Float64-enabled central Poisson accuracy matrix
+        env:
+          JAX_ENABLE_X64: "true"
+        run: python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmfCentralAccuracy'
+      - name: Complete native Poisson-focused API and random sampling tests
+        run: python -m pytest tests/scipy_stats_test.py tests/random_lax_test.py -q -k 'Poisson'
+      - name: Exact-sampler large-lambda distribution regression
+        run: python -m pytest tests/random_lax_test.py -q -k 'PoissonLargeLambdaVariance'
