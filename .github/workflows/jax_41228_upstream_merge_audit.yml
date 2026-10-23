@@ -1,0 +1,39 @@
+name: JAX 41228 current main mergeability diagnostics
+on:
+  push:
+    branches:
+      - ci/jax-41228-upstream-merge-audit-20261024
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  merge-into-review-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 250
+      - name: Identify pinned upstream head and historical merge base
+        run: |
+          git remote add upstream https://github.com/jax-ml/jax.git
+          git fetch --no-tags --depth=260 upstream main
+          echo "PR_SOURCE=$(git rev-parse HEAD)"
+          echo "UPSTREAM_MAIN=$(git rev-parse FETCH_HEAD)"
+          git merge-base HEAD FETCH_HEAD || true
+      - name: Attempt real three-way Git merge and show conflicts
+        run: |
+          set +e
+          git -c user.name=PR-merge-audit -c user.email=ci@example.invalid merge --no-ff --no-commit FETCH_HEAD
+          result=$?
+          echo "GIT_MERGE_EXIT_CODE=$result"
+          echo "UNMERGED_FILES_BEGIN"
+          git diff --name-only --diff-filter=U
+          echo "UNMERGED_FILES_END"
+          echo "CONFLICT_BLOCKS_BEGIN"
+          git diff --cc -- jax/_src/random/core.py jax/_src/scipy/stats/poisson.py tests/scipy_stats_test.py tests/random_lax_test.py | head -350
+          echo "CONFLICT_BLOCKS_END"
+          echo "STATUS_BEGIN"
+          git status --short | head -50
+          echo "STATUS_END"
+          exit 0
