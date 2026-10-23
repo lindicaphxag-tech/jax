@@ -21,3 +21,5 @@ jobs:
           python -m pip install -e ".[ci]" scipy
       - name: Paired warm CPU timing and variance evidence
         run: python ci/poisson_41228_paired_perf.py
+      - name: Sixteen independent seed distributions (same PR source)
+        run: python ci/poisson_41228_multiseed_accuracy.py
