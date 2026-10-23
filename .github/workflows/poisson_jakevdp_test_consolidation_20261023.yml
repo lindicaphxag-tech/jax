@@ -1,0 +1,38 @@
+name: JAX Poisson reviewer test consolidation native gate
+on:
+  push:
+    branches:
+      - review/poisson-jakevdp-20261023-test-simplify
+  pull_request:
+    branches:
+      - fix/poisson-large-lambda-41202
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reviewer-gate:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install native editable JAX, SciPy and test tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[ci]" scipy pytest absl-py parameterized ruff
+      - name: Run Ruff and native CPU Poisson public API / random tests
+        run: |
+          python -m py_compile tests/scipy_stats_test.py
+          ruff check tests/scipy_stats_test.py
+          python -m pytest tests/scipy_stats_test.py tests/random_lax_test.py -q -k "Poisson"
+      - name: Repeat public Poisson tests in float64-enabled mode
+        if: runner.os == 'Linux'
+        env:
+          JAX_ENABLE_X64: "true"
+        run: python -m pytest tests/scipy_stats_test.py -q -k "PoissonLogPmf"
