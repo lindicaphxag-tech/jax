@@ -32,6 +32,8 @@ jobs:
           ruff check jax/_src/random/core.py
       - name: Matched-source stable versus lazy-central sampler and timing
         run: python ci/poisson_batched_central_ab.py
+      - name: Repeated blocks, mixed rates and branch-boundary contract
+        run: python ci/poisson_batched_central_robust.py
       - name: Native Poisson public log-PMF and sampling regression
         if: runner.os == 'Linux'
         run: |
