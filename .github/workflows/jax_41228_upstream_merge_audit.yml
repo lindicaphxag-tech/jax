@@ -1,5 +1,8 @@
 name: JAX 41228 current main mergeability diagnostics
 on:
+  pull_request:
+    branches:
+      - fix/poisson-large-lambda-41202
   push:
     branches:
       - ci/jax-41228-upstream-merge-audit-20261024
