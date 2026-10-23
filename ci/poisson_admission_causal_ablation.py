@@ -95,7 +95,8 @@ def compile_diagnostic(fn, key, rates, n):
   t1 = time.perf_counter()
   executable = lowered.compile()
   t2 = time.perf_counter()
-  executable(*args).block_until_ready()
+  # static_argnums=(2, 3, 4) are embedded in the compiled executable.
+  executable(key, rates).block_until_ready()
   return {"lower_ms": (t1-t0)*1000, "compile_ms": (t2-t1)*1000,
           "stablehlo_chars":len(stablehlo_text)}
 
