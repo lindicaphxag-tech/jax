@@ -1,0 +1,42 @@
+name: Poisson sampler hot-path causal ablation
+on:
+  push:
+    branches:
+      - experiment/poisson-sampler-hotpath-20261023
+  pull_request:
+    branches:
+      - ci/poisson-41228-exacthead-review-20261023
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sampler-hotpath:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install native matched JAX CPU runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[ci]" scipy pytest absl-py parameterized ruff
+      - name: Check source syntax and lint
+        run: |
+          python -m py_compile jax/_src/random/core.py ci/poisson_sampler_hotpath_ab.py
+          ruff check jax/_src/random/core.py
+      - name: Identical-key stable-vs-fast sampler ablation
+        run: python ci/poisson_sampler_hotpath_ab.py
+      - name: Full source-matched old-vs-fast sampling and holdout evidence
+        if: runner.os == 'Linux'
+        run: python ci/poisson_native_sampler_review_benchmark.py
+      - name: Native public Poisson log-PMF and sampling regression
+        if: runner.os == 'Linux'
+        run: |
+          python -m pytest tests/scipy_stats_test.py -q -k 'PoissonLogPmf'
+          python -m pytest tests/random_lax_test.py -q -k 'PoissonLargeLambdaVariance'
