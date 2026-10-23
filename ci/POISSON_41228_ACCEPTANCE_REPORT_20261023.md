@@ -5,6 +5,14 @@
 **Exact fork-only CI:** https://github.com/lindicaphxag-tech/jax/actions/runs/39948824118 (**Success**)  
 **Benchmark implementation:** [ci/poisson_41228_paired_perf.py](../ci/poisson_41228_paired_perf.py)
 
+## Pinned historical-source equivalence audit (new)
+
+A further exact-source GitHub Actions run [#39950636688](https://github.com/lindicaphxag-tech/jax/actions/runs/39950636688) finished **Success**. It verified the reconstructed historical sampler against the **official pre-fix PR base SHA** `a64c1df95008b7402a3cc2e83e036c2431a25999`. The source download is content-verified by the Git blob hash `a693bb580ee30c9e768bf256fbbd2baf82a17e04`; after removing function annotations/decorators and normalizing explicit module qualification, the historical `_poisson_rejection` Python AST exactly matched the benchmark's `old_rejection`.
+
+The same workflow then ran both paired CPU timings and the independent sixteen-seed variance comparison to completion. This closes the **Python source equivalence** concern; it does **not** prove identical compiled machine code across historical/new JAX builds.
+
+Observed paired median new/old time ratios in this independently repeated run were 0.5674 (1e4, 8192), 0.4283 (1e4, 32768), 0.9216 (1e8, 8192), and 0.6719 (1e8, 32768). The sixteen-seed variance numbers matched the previous deterministic run (fixed seeds). They are repeated computation, not a new independent seed population or platform.
+
 ## Reviewer concern addressed
 
 The JAX reviewer specifically requested a benchmark for the added transformed-rejection `log_pmf` hot-path work. This study compares the *unchanged pre-fix acceptance expression* (`-lam + k*log(lam) - lgamma(k + 1)`) against the **actual** current PR implementation `jax._src.random.core._poisson_rejection`. The test uses the same RNG, schedule, shape and dtype for paired runs. No production code is changed on the official PR.
