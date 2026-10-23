@@ -22,6 +22,20 @@ JAX `0.12.0.dev20261023+2aa5428`, CPU. JIT is warmed up, timings are synchronize
 
 The full individual pair times and variance outputs are printed in the [Actions job logs](https://github.com/lindicaphxag-tech/jax/actions/runs/39948824118). The job passed install, source benchmark, and checkout without errors.
 
+
+## Independent-seed native replication (2026-10-23, new)
+
+The expanded **exact-fork-source** workflow [#39950128830](https://github.com/lindicaphxag-tech/jax/actions/runs/39950128830) completed **Success**. The benchmark ran JAX `0.12.0.dev20261023+8c34e91`, CPU, and executed 16 distinct `jax.random.fold_in` seeds with 32,768 samples per variant, per seed, at `lambda=1e8`. Both paths used the same PRNG key for each paired comparison.
+
+| Path | Mean signed relative variance error over 16 seeds | Approximate 95% CI over seed-to-seed means |
+|---|---:|---:|
+| Historical rejection log-PMF expression | **+74.086%** | **[+73.072%, +75.100%]** |
+| Current PR rejection log-PMF expression | **+0.0657%** | **[-0.413%, +0.545%]** |
+
+Full unrounded results and per-seed means/variances are printed as `MULTISEED_JSON` in [run #39950128830 logs](https://github.com/lindicaphxag-tech/jax/actions/runs/39950128830). Script: [ci/poisson_41228_multiseed_accuracy.py](./poisson_41228_multiseed_accuracy.py). All paired timing and sixteen-seed steps in the native workflow were green.
+
+**Interpretation and caveats.** The interval is a descriptive normal-approximation confidence interval based on variation across 16 fixed seeds, not a formal correctness proof or independent platform replication. The test executes the actual fixed internal sampler from the fork branch against a manually transcribed, source-matched original algorithm body; it is not a two-checkout build of independent historical wheels. The PR remains **open**; no human reviewer approval is implied by fork CI success. These larger numerical accuracy improvements do not establish a universal CPU/GPU throughput gain.
+
 ## Interpretation limits (important)
 
 - These numbers are **not** a universal speedup claim; GPU, TPU, alternate CPU architectures, compiler cache state and other shapes are not covered.
