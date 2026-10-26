@@ -13,7 +13,7 @@ floor(lambda + proposal + 0.43)
 
 JAX's previous `float32` evaluation of the *left* side loses integer residues when `lambda >= 2**24`, because adding the large mean rounds the entire candidate to a sparse float32 lattice before an integer conversion. The branch's research implementation evaluates the *right* side, rounds the small proposal first, then sums the integer base and offset in the **output integer dtype**. For means below `2**24`, the implementation deliberately preserves the old float-proposal path and converts to integers only after the legacy floor.
 
-**Important numerical limitation:** the branch still converts the integer candidate back to `float32` for the existing `_poisson_log_pmf` acceptance computation. Therefore restoring the proposal's integer support is a **necessary, not sufficient** condition for a statistically exact Poisson sampler. Strict acceptance-law correctness, extreme-tail range/overflow and all supported dtypes still require proof and native tests. Do not present it as a complete solution.
+**Important numerical limitation:** the branch now retains the exact integer-centered `local_offset` as an optional `exact_delta` input to `_poisson_log_pmf` for the central deviance, instead of recomputing `float32(k) - lambda` after `k` has been rounded to a sparse float lattice. The function still uses a float32-rounded `k` in the normalizer and far-tail factors, and the full BTRS law, exceptional inputs and range/overflow remain **unproved**. Restoring integer support and central log-likelihood precision are necessary but not sufficient to certify a statistically exact Poisson distribution.
 
 ## Native released JAX source-transplant pilots
 
@@ -65,3 +65,22 @@ Native CPU interleaved latency readings fluctuate across rates and seeds; a stab
 - **Production experiment:** [jax/_src/random/core.py](../jax/_src/random/core.py) with guarded integer-centered proposal.
 - **Regression test:** [tests/random_lax_test.py](../tests/random_lax_test.py), requires all float32 integer residues to appear at selected large means.
 - **Related upstream issue draft:** [JAX_POISSON_INTEGER_SUPPORT_UPSTREAM_ISSUE_DRAFT.md](JAX_POISSON_INTEGER_SUPPORT_UPSTREAM_ISSUE_DRAFT.md).
+
+
+## Additional integer-offset log-PMF precision gate (independent CPU experiment)
+
+On local JAX 0.9.0.1 CPU, compare 2,000 independently generated **integer** count values per mean within `mean ± 5*sqrt(mean)` against `scipy.stats.poisson.logpmf` in float64. The historical `float32(k)` calculation loses the low residue bits; the optional `exact_delta` parameter preserves the signed integer offset before evaluating central deviance:
+
+| mean | Old, float32-rounded-k log-PMF max abs error | Centered exact-delta max abs error |
+| ---: | ---: | ---: |
+| 2e7 | 0.001117 | 0.00000334 |
+| 4e7 | 0.001582 | 0.00000310 |
+| 7e7 | 0.002369 | 0.00000358 |
+| 1e8 | 0.001992 | 0.00000286 |
+| 1.5e8 | 0.003265 | 0.00000334 |
+
+The test was a **source-equivalent local formula transposition**, not a full native-head JAX test. A new in-repository regression `testPoissonIntegerOffsetLogPmfAccuracy` compares representative integer counts against the SciPy oracle with `atol=2e-4`.
+
+A separate 5-seed × 10,000-draw CPU sampling check of the integer-centered proposal **with** this improved acceptance deviance still occupied all float32 spacing classes, with per-rate variance/mean 0.9976–0.9977 at means from 2e7 to 1.5e8. For `lambda=1e8`, the 8-way residue chi-square p-value was about 0.337. These are not proof of an exact distribution or of a particular performance bound.
+
+The optional `exact_delta` path is used **only within this research branch's BTRS sampler**; public SciPy-shaped `poisson.logpmf(k,mu)` continues to call the unchanged two-argument formulation. This division limits public API risk, though cross-device/compiler and complete numerical acceptance correctness still require independent testing.
