@@ -64,3 +64,22 @@ Additional local `jit`, `vmap`, `grad`, and second derivative checks on float32 
 **Validation boundary:** the local executed harness implements the exact candidate arithmetic on an older JAX sampler body, not the newest JAX PR installation. The linked fork scripts were published after the local run; do not claim those exact checked-in files have passed GitHub Actions until a completed run is visible. At the most recent check, no Actions workflow run had appeared for the branch. Benchmark timings are device/workload-specific.
 
 **Merge decision:** retain the stable formula but do not use the naive `lambda<1e6` fast-path threshold. The next upstream acceptance gate is a reproducible exact-head benchmark with all appropriate dtypes, mixed-rate shapes, and a maintainer-approved performance tradeoff; do not open duplicate PRs.
+
+
+## Mixed-rate regression: transition and far-tail variance, fixed seeds (2026-10-26)
+
+**Now in official upstream PR test** [jax-ml/jax#41228 at `280b8edf`](https://github.com/jax-ml/jax/commit/280b8edff3ecf6397d5906f71385fe50bb3e9b75). This changes the existing 20,000-draw Poisson variance regression from a single rate to two contiguous blocks of 10,000 draws: `[3e6]*10000 + [1e8]*10000`. JAX's vectorized sampler handles both in the same call; no additional test method or draws were added.
+
+Locally installed **JAX 0.9.0.1 CPU** with actual source-matched BTRS (the only change is candidate #41228 acceptance log-PMF):
+
+| Key seed | λ=3e6 old | λ=3e6 stable | λ=1e8 old | λ=1e8 stable |
+|---:|---:|---:|---:|---:|
+| 0 | 0.90502 | 1.00090 | 1.49778 | 1.00515 |
+| 1 | 0.88729 | 0.99478 | 1.42163 | 0.99891 |
+| 7 | 0.90231 | 0.99685 | 1.49184 | 1.00139 |
+| 37 | 0.92976 | 0.98585 | 1.44336 | 0.98345 |
+| 53 | 0.90077 | 1.00066 | 1.49748 | 0.98174 |
+
+Numbers are blockwise **sample variance divided by λ**, with target 1.00. A separate local call to the unmodified released **public** `jax.random.poisson(jax.random.key(0), rate_vector, dtype=np.int32)` reproduced the exact old seed-0 values **0.9050187216 / 1.4977815172**. The candidate is not a separately installed latest-JAX source tree in this local control; it reuses the actual released rejection sampler with the precise PR formula substitution.
+
+The two parameter regions produce **opposite signed variance errors** in the historical float32 sampler at equal sample budget. This justifies testing both instead of inferring all failure modes from one large mean. The five seeds are corroborative, not a confidence interval or a claim of all-dtype/platform validity. Full official JAX CI and maintainer approval remain pending.
