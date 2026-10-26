@@ -1,0 +1,35 @@
+name: JAX Poisson exact-head CPU review gate
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poisson-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact upstream candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: 280b8edff3ecf6397d5906f71385fe50bb3e9b75
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install native JAX CPU environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[ci]" scipy pytest absl-py parameterized
+      - name: Verify checkout and CPU backend
+        run: |
+          test "$(git rev-parse HEAD)" = 280b8edff3ecf6397d5906f71385fe50bb3e9b75
+          python -c "import jax; print(jax.__version__, jax.devices())"
+      - name: Run source-native sampling regression
+        run: python -m pytest tests/random_lax_test.py -q -k "PoissonLargeLambdaVariance"
+      - name: Run public vectorized SciPy-parity regressions
+        env:
+          JAX_ENABLE_X64: "true"
+        run: python -m pytest tests/scipy_stats_test.py -q -k "PoissonLogPmfCentralAccuracy or PoissonLogPmfLargeFarTail"
