@@ -2027,9 +2027,20 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
     v = uniform(subkey_1, shape, lam.dtype)
     u_shifted = 0.5 - abs(u)
 
-    k = lax.floor((2 * a / u_shifted + b) * u + lam + 0.43)
+    proposal = (2 * a / u_shifted + b) * u
+    # At large rates float32 cannot represent adjacent integers. Preserve
+    # the low-order count bits by rounding a small offset *before* integer
+    # addition, rather than rounding (lam + proposal) in float32.
+    k_float = lax.floor(proposal + lam + 0.43)
+    lam_base = lax.floor(lam)
+    local_offset = lax.floor(proposal + (lam - lam_base) + 0.43)
+    k_centered = lam_base.astype(dtype) + local_offset.astype(dtype)
+    # Exact old behavior for rates with unit-spaced float32 integers.
+    k = jnp.where(lam < 2**24, k_float.astype(dtype), k_centered)
     s = lax.log(v * inv_alpha / (a / (u_shifted * u_shifted) + b))
-    t = _poisson_log_pmf(k, lam)
+    # Research-only boundary: k is still rounded for log-PMF. The proposal
+    # now spans all integer residues, but an exact acceptance proof is OPEN.
+    t = _poisson_log_pmf(k.astype(lam.dtype), lam)
 
     accept1 = (u_shifted >= 0.07) & (v <= v_r)
     reject = (k < 0) | ((u_shifted < 0.013) & (v > u_shifted))
@@ -2045,7 +2056,7 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
     i, k_out, accepted, key = carry
     return (~accepted).any() & (i < max_iters)
 
-  k_init = lax.full_like(lam, -1, lam.dtype, shape)
+  k_init = lax.full_like(lam, -1, dtype, shape)
   accepted = lax.full_like(lam, False, np.dtype('bool'), shape)
   k = lax_control_flow.while_loop(cond_fn, body_fn, (0, k_init, accepted, key))[1]
   return k.astype(dtype)
