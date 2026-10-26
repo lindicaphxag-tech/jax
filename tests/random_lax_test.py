@@ -824,6 +824,22 @@ class DistributionsTest(RandomTestBase):
     self.assertAllClose(samples.var(axis=1), lam, rtol=0.05,
                         check_dtypes=False)
 
+  def testPoissonHighRateCountResidues(self):
+    # The log-PMF-only repair can restore variance without restoring
+    # integer support: large float32 proposals land on a sparse lattice.
+    for rate in (2e7, 4e7, 7e7, 1e8, 1.5e8):
+      spacing = int(np.spacing(np.float32(rate)))
+      samples = np.asarray(
+          random.poisson(self.make_key(2026), rate, shape=(12000,),
+                         dtype=np.int32),
+          dtype=np.int64,
+      )
+      np.testing.assert_array_equal(
+          np.unique(samples % spacing), np.arange(spacing))
+      self.assertAllClose(
+          samples.astype(np.float64).var(), rate, rtol=0.07,
+          check_dtypes=False)
+
   def testPoissonBatched(self):
     key = self.make_key(1)
     lam = jnp.concatenate([2 * jnp.ones(10000), 20 * jnp.ones(10000)])
