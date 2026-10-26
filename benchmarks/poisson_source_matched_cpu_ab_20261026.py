@@ -67,26 +67,31 @@ baseline = ns["_poisson_rejection"]
 exec(compile(candidate_body, "<candidate sampler>", "exec"), ns)
 candidate = ns["_poisson_rejection"]
 
-print("runtime:", jax.__version__, rc.__name__, jax.devices(), flush=True)
-for lam_value in (20., 100., 1000., 1e5, 1e6, 1e8):
-    lam = jnp.asarray(lam_value, jnp.float32)
-    result = {}
-    for name, fn in (("original", baseline), ("candidate", candidate)):
-        def sample(seed):
-            return fn(jax.random.key(seed), lam, (6000,), np.dtype("int32"), 100)
-        sample(1).block_until_ready()
-        timings = []
-        all_samples = []
-        for seed in (37, 41, 43, 47, 53):
-            start = time.perf_counter()
-            s = sample(seed)
-            s.block_until_ready()
-            timings.append((time.perf_counter() - start) * 1000)
-            all_samples.append(np.asarray(s, dtype=np.float64))
-        vals = np.concatenate(all_samples)
-        result[name] = {
-            "mean": round(float(vals.mean()), 3),
-            "variance_over_lambda": round(float(vals.var() / lam_value), 5),
-            "median_ms": round(statistics.median(timings), 3),
-        }
-    print(f"lambda={lam_value:g}", result, flush=True)
+def main():
+    print("runtime:", jax.__version__, rc.__name__, jax.devices(), flush=True)
+    for lam_value in (20., 100., 1000., 1e5, 1e6, 1e8):
+        lam = jnp.asarray(lam_value, jnp.float32)
+        result = {}
+        for name, fn in (("original", baseline), ("candidate", candidate)):
+            def sample(seed):
+                return fn(jax.random.key(seed), lam, (6000,), np.dtype("int32"), 100)
+            sample(1).block_until_ready()
+            timings = []
+            all_samples = []
+            for seed in (37, 41, 43, 47, 53):
+                start = time.perf_counter()
+                s = sample(seed)
+                s.block_until_ready()
+                timings.append((time.perf_counter() - start) * 1000)
+                all_samples.append(np.asarray(s, dtype=np.float64))
+            vals = np.concatenate(all_samples)
+            result[name] = {
+                "mean": round(float(vals.mean()), 3),
+                "variance_over_lambda": round(float(vals.var() / lam_value), 5),
+                "median_ms": round(statistics.median(timings), 3),
+            }
+        print(f"lambda={lam_value:g}", result, flush=True)
+
+
+if __name__ == "__main__":
+    main()
