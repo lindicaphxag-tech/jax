@@ -27,7 +27,7 @@ Therefore repairing the log-PMF computation in PR #41228 can fix moment distorti
 | 1e8 | 8 | 100% | 12.73% | 1.4318 |
 | 1.5e8 | 16 | 100% | 6.48% | 1.2349 |
 
-A **separate source-transplant counterfactual**, [local source-matched CPU control](../../), held the released BTRS proposal, RNG, and integer conversion unchanged but substituted the full current candidate log-PMF arithmetic. With the same 12,000-draw workload, all samples still landed on the float32 lattice at each tested mean, **while corrected variance/rate was 1.0097, 1.0102, 1.0098, 1.0098, 1.0102** respectively. That counterfactual is **not a native exact-head CI run**; the production `float32` cast and proposal are directly visible on official PR source.
+A **separate source-transplant counterfactual**, [independent CPU source-matched acceptance A/B](https://github.com/lindicaphxag-tech/jax/blob/research/poisson-hotpath-benchmark-20261026/benchmarks/poisson_source_matched_cpu_ab_20261026.py), held the released BTRS proposal, RNG, and integer conversion unchanged but substituted the full current candidate log-PMF arithmetic. With the same 12,000-draw workload, all samples still landed on the float32 lattice at each tested mean, **while corrected variance/rate was 1.0097, 1.0102, 1.0098, 1.0098, 1.0102** respectively. That counterfactual is **not a native exact-head CI run**; the production `float32` cast and proposal are directly visible on official PR source.
 
 ## Mathematical distinction: moments vs distribution
 
@@ -49,3 +49,21 @@ For `m=8` and `lambda=1e8`, the right side is indistinguishable from `1/8` in or
 4. Add native source-head CPU tests and, if approved, GPU checks, with a deterministic residue-class red/green diagnostic and independent distributional validation.
 
 Research result only. No algorithmic fix or additional official merged contribution is claimed.
+
+
+## x64 enabled does not by itself restore integer support (local JAX 0.9.0.1 CPU)
+
+The independent control also executed:
+
+```python
+with jax.enable_x64(True):
+    samples = jax.random.poisson(
+        jax.random.key(2026),
+        jnp.asarray(1e8, dtype=jnp.float64),
+        shape=(12000,), dtype=jnp.int64)
+    assert np.array_equal(np.unique(np.asarray(samples) % 8), [0])
+```
+
+The resulting `int64` samples at `lambda=1e8` were **all divisible by 8**, and at `lambda=1.5e8` all were divisible by 16, with 12,000 outputs each. This follows from the **forced float32 internal rate cast in the exact public wrapper**; wider input/output precision is lost before the BTRS proposal. The relevant bug fix is about the **internal integer proposal and probability law**, not an output dtype preference.
+
+One public issue creation attempt at `jax-ml/jax` failed with **403 insufficient GitHub integration permission**. Therefore this branch and any draft issue description are **fork research, not an upstream issue or PR**, and no acceptance is claimed.
