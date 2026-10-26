@@ -83,3 +83,35 @@ Locally installed **JAX 0.9.0.1 CPU** with actual source-matched BTRS (the only 
 Numbers are blockwise **sample variance divided by λ**, with target 1.00. A separate local call to the unmodified released **public** `jax.random.poisson(jax.random.key(0), rate_vector, dtype=np.int32)` reproduced the exact old seed-0 values **0.9050187216 / 1.4977815172**. The candidate is not a separately installed latest-JAX source tree in this local control; it reuses the actual released rejection sampler with the precise PR formula substitution.
 
 The two parameter regions produce **opposite signed variance errors** in the historical float32 sampler at equal sample budget. This justifies testing both instead of inferring all failure modes from one large mean. The five seeds are corroborative, not a confidence interval or a claim of all-dtype/platform validity. Full official JAX CI and maintainer approval remain pending.
+
+
+## Independent 24-pair hot-loop performance audit (2026-10-26 evening)
+
+**Scope:** locally installed JAX **0.9.0.1 CPU** only. Took the released production \`_poisson_rejection\` method body verbatim and replaced **only** the acceptance log-PMF with the operations at official PR #41228; identical PRNG key, compiled/JIT warmed before timing, \`block_until_ready\` on each run. Used 24 interleaved/reversed-order paired repetitions **per regime**, and the *same sampled key* for both implementations. Times below exclude JIT compilation. Do **not** present this as latest-JAX exact-head or GPU performance.
+
+| mean | sample shape | original CPU median (ms) | candidate CPU median (ms) | median paired candidate/original |
+| ---: | ---: | ---: | ---: | ---: |
+| 20 | 1,024 | 0.401 | 0.462 | 1.145 |
+| 20 | 8,192 | 2.071 | 2.375 | 1.158 |
+| 20 | 32,768 | 6.526 | 7.404 | 1.118 |
+| 1,000 | 1,024 | 0.267 | 0.278 | 1.037 |
+| 1,000 | 8,192 | 2.368 | 2.564 | 1.114 |
+| 1,000 | 32,768 | 5.027 | 5.711 | 1.153 |
+| 3e6 | 1,024 | 0.253 | 0.276 | 1.064 |
+| 3e6 | 8,192 | 1.906 | 2.202 | 1.168 |
+| 3e6 | 32,768 | 5.014 | 5.623 | 1.107 |
+| 1e8 | 1,024 | 0.260 | 0.295 | 1.088 |
+| 1e8 | 8,192 | 1.530 | 2.196 | 1.431 |
+| 1e8 | 32,768 | 3.313 | 5.651 | **1.681** |
+
+For the last two high-rate conditions, a nonparametric 2,000-resample bootstrap of the **24 paired ratios**, descriptive only given possible serial timing drift, gave percentile intervals **[1.378, 1.507]** at n=8192 and **[1.630, 1.720]** at n=32768. On the small n=1024 workloads several intervals included 1, and the dispatch, CPU load and compilation setup may dominate. This is a *performance regression signal* that must be acknowledged in review, not proof of a compiler- or hardware-invariant slowdown.
+
+### Negative control: removing the separate far-tail log-PMF
+
+A CPU source-transplant simplification replaced the far-tail ratio/log fallback with direct \`k*log1p(-(k-lambda)/k)+(k-lambda)\` outside the central series, intending to eliminate several hot-path logs. **It is NOT an acceptable public log-PMF replacement:** \`lambda=1e-8, k=1\` changes a finite log-PMF (about \`-18.42\`) to \`-inf\` due float32 rounding; for \`lambda=20, k=1e6\` it shifts the log probability by more than a thousand log units. Sampling the ordinary regimes happened to produce identical outputs for matched keys, but did not prove general correctness. 16-pair timings did **not** show stable improvement: at \`lambda=1e8, n=8192\`, stable and simplified medians were 2.035 and 2.040 ms respectively; at n=32768, 5.279 vs 5.129 ms. Therefore **do not promote this fast-path** into upstream production code.
+
+### Reviewer decision implications
+
+1. The unmodified complex stable formula solves an observed accuracy issue but has **measurable CPU sampling throughput cost**. Do not claim it is fast without exact-head platform controls.
+2. Keep a faithful reference branch for the existing #41228 correctness fix. Compare simpler forms on a **separate fork** and reject any version that loses public support/tail semantics or sampling distribution consistency.
+3. Repeat source-native performance tests on the exact current PR head with the JAX CI-supported CPU, then profile fusion and device-specific costs. The fork already has [a source-matched exact-head benchmark](../ci/poisson_native_sampler_review_benchmark.py) on its dedicated CI review branch; that script is **not** part of this benchmark branch. A prior exact-head native Actions run is not interchangeable with this new pairwise timing experiment.
