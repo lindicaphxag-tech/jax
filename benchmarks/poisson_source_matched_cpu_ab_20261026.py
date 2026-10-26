@@ -91,6 +91,9 @@ def main():
                 "median_ms": round(statistics.median(timings), 3),
             }
         print(f"lambda={lam_value:g}", result, flush=True)
+        if lam_value == 1e8:
+            assert result["original"]["variance_over_lambda"] > 1.2, result
+            assert abs(result["candidate"]["variance_over_lambda"] - 1) < .06, result
 
 
 if __name__ == "__main__":
