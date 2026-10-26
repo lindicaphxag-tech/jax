@@ -39,3 +39,28 @@ The experiment is **falsified as a general accuracy-preserving optimization** de
 4. Request maintainer re-review only after benchmark logs are grounded in the exact changed revision; no external PR comment was posted because the available GitHub integration returned 403.
 
 No new upstream merged commit is claimed.
+
+
+## 2026-10-26 local source-matched reproducibility audit (new evidence)
+
+A fresh Linux CPU run on installed **JAX 0.9.0.1** extracted the actual released production `_poisson_rejection` method, replaced **only** its acceptance log-PMF with the exact mathematical operations from upstream candidate head `3894c33`, and ran 5 fixed random seeds x 6,000 int32 samples/rate. This explicitly accommodates the legacy module path `jax._src.random`; recent JAX main uses `jax._src.random.core`.
+
+| lambda | baseline variance/lambda | stable variance/lambda | baseline median ms | candidate median ms |
+| ---: | ---: | ---: | ---: | ---: |
+| 20 | 1.00353 | 1.00353 | 2.562 | 3.335 |
+| 100 | 1.01176 | 1.01176 | 1.559 | 1.799 |
+| 1e3 | 1.00600 | 1.00582 | 1.664 | 1.816 |
+| 1e5 | 1.00889 | 0.99678 | 1.741 | 1.827 |
+| 1e6 | 1.03426 | 0.99744 | 1.711 | 1.975 |
+| 1e8 | 1.43034 | 0.99763 | 1.510 | 1.797 |
+
+Additional local `jit`, `vmap`, `grad`, and second derivative checks on float32 vectors found expected finite results and gradients; notably `k=0, mu=0` yielded log-PMF=0 and first derivative -1. Large finite float32 center rates up to `1e38` produced log-PMF within `1e-5` of the asymptotic `-0.5*log(2*pi*mu)` reference on CPU.
+
+**Authoritative newly added fork artifacts:**
+- [Source-matched legacy/current-layout A/B](../benchmarks/poisson_source_matched_cpu_ab_20261026.py)
+- [JIT/vmap/grad/Hessian and extreme-rate contract](../benchmarks/poisson_ad_contract_cpu_20261026.py)
+- [Fork-only GitHub Actions workflow](../.github/workflows/poisson-cpu-contract-20261026.yml)
+
+**Validation boundary:** the local executed harness implements the exact candidate arithmetic on an older JAX sampler body, not the newest JAX PR installation. The linked fork scripts were published after the local run; do not claim those exact checked-in files have passed GitHub Actions until a completed run is visible. At the most recent check, no Actions workflow run had appeared for the branch. Benchmark timings are device/workload-specific.
+
+**Merge decision:** retain the stable formula but do not use the naive `lambda<1e6` fast-path threshold. The next upstream acceptance gate is a reproducible exact-head benchmark with all appropriate dtypes, mixed-rate shapes, and a maintainer-approved performance tradeoff; do not open duplicate PRs.
