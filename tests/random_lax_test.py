@@ -860,6 +860,17 @@ class DistributionsTest(RandomTestBase):
       np.testing.assert_allclose(
           np.asarray(actual), expected, rtol=0.0, atol=2e-4)
 
+  def testPoissonCenteredInt32RangeGuard(self):
+    # The integer-centered research path must not wrap int32 near its limit.
+    # Above 2**30 we preserve the existing sampler instead of applying the
+    # unproven centered integer arithmetic. This is NOT a claim that the
+    # pre-existing sampler is distributionally accurate at those rates.
+    rate = np.float32(2**31 - 8192)
+    sample = np.asarray(
+        random.poisson(self.make_key(2026), rate, shape=(4096,),
+                       dtype=np.int32))
+    self.assertTrue(np.all(sample >= 0))
+
   def testPoissonBatched(self):
     key = self.make_key(1)
     lam = jnp.concatenate([2 * jnp.ones(10000), 20 * jnp.ones(10000)])
