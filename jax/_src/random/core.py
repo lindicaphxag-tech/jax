@@ -1943,13 +1943,17 @@ def _poisson_knuth(key: Key, lam, shape, dtype, max_iters) -> Array:
   return (k - 1).astype(dtype)
 
 
-def _poisson_log_pmf(k, lam):
-  """Stable Poisson log-PMF shared by rejection sampling and scipy.stats."""
+def _poisson_log_pmf(k, lam, *, exact_delta=None):
+  """Stable Poisson log-PMF, optionally preserving an exact integer offset.
+
+  The optional offset is for the experimental BTRS integer proposal only.
+  Ordinary scipy.stats callers retain their prior two-argument semantics.
+  """
   # For large lam, evaluating -lam + k * log(lam) - lgamma(k + 1)
   # directly loses all useful digits in float32.  Rewrite the same quantity
   # around k ~= lam and use the Stirling correction already used by BTRS.
   safe_k = jnp.maximum(k, 1)
-  delta = safe_k - lam
+  delta = safe_k - lam if exact_delta is None else exact_delta
   relative_delta = delta / safe_k
   # log1p(-t) + t is O(t**2): separately computing
   # k * log1p(-t) + (k - lam) loses digits near the mean in float32.
@@ -2038,9 +2042,15 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
     # Exact old behavior for rates with unit-spaced float32 integers.
     k = jnp.where(lam < 2**24, k_float.astype(dtype), k_centered)
     s = lax.log(v * inv_alpha / (a / (u_shifted * u_shifted) + b))
-    # Research-only boundary: k is still rounded for log-PMF. The proposal
-    # now spans all integer residues, but an exact acceptance proof is OPEN.
-    t = _poisson_log_pmf(k.astype(lam.dtype), lam)
+    # Preserve the exact small integer offset in the central deviance.
+    # At float32 rates >= 2**24, lam is integral but k's cast to float32
+    # may erase its low-order count bits. The offset does not erase them.
+    # Remainder of the log-normalizer still uses rounded float32 k, so
+    # a full exact-law proof is still outstanding.
+    t = _poisson_log_pmf(
+        k.astype(lam.dtype), lam,
+        exact_delta=jnp.where(
+            lam < 2**24, k.astype(lam.dtype) - lam, local_offset))
 
     accept1 = (u_shifted >= 0.07) & (v <= v_r)
     reject = (k < 0) | ((u_shifted < 0.013) & (v > u_shifted))
