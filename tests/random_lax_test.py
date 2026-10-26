@@ -840,6 +840,26 @@ class DistributionsTest(RandomTestBase):
           samples.astype(np.float64).var(), rate, rtol=0.07,
           check_dtypes=False)
 
+  def testPoissonIntegerOffsetLogPmfAccuracy(self):
+    # A float32 cast of large integer k loses the residue bits. Supply the
+    # precise integer-domain offset to the experimental acceptance formula.
+    from jax._src.random import core as random_core
+
+    offsets = np.asarray(
+        [-50001, -10003, -101, -1, 0, 1, 101, 10003, 50001],
+        dtype=np.int32,
+    )
+    for mean in (2e7, 4e7, 7e7, 1e8, 1.5e8):
+      count = jnp.asarray(np.int32(mean) + offsets)
+      actual = random_core._poisson_log_pmf(
+          count.astype(jnp.float32), jnp.float32(mean),
+          exact_delta=jnp.asarray(offsets, dtype=jnp.float32),
+      )
+      expected = scipy.stats.poisson.logpmf(
+          np.asarray(count, dtype=np.float64), mean)
+      np.testing.assert_allclose(
+          np.asarray(actual), expected, rtol=0.0, atol=2e-4)
+
   def testPoissonBatched(self):
     key = self.make_key(1)
     lam = jnp.concatenate([2 * jnp.ones(10000), 20 * jnp.ones(10000)])
