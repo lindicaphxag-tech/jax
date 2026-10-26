@@ -2009,6 +2009,39 @@ def _poisson_log_pmf(k, lam):
   return jnp.where(lam < 0.0, jnp.nan, result)
 
 
+
+def _poisson_rejection_log_pmf(k, lam):
+  """Research-only BTRS hot path with an exact-fallback central-region guard.
+
+  This is intentionally separate from the public Poisson log-PMF. Computing
+  the full stable log-PMF for all candidates requires extra transcendental
+  operations even when every proposed count is close to the mean.
+  """
+  safe_k = jnp.maximum(k, 1)
+  t = (safe_k - lam) / safe_k
+  all_central = jnp.all(
+      (safe_k > 10.0) & (lam > 0.0) & (jnp.abs(t) <= 0.01)
+  )
+
+  def central_only(_):
+    series = ((((((t / 8 + 1 / 7) * t + 1 / 6) * t + 1 / 5)
+                * t + 1 / 4) * t + 1 / 3) * t + 1 / 2)
+    deviance = -safe_k * (t * t) * series
+    k_sq = safe_k * safe_k
+    stirling = (
+        1.0 / 12 - (1.0 / 360 - 1.0 / 1260 / k_sq) / k_sq
+    ) / safe_k
+    return deviance - (
+        0.5 * (lax.log(safe_k) + math.log(2 * math.pi)) + stirling
+    )
+
+  # This is a runtime batch-level decision. Mixed or extreme proposals take
+  # the unmodified full path; no scalar public log-PMF API is changed.
+  return lax.cond(
+      all_central, central_only, lambda _: _poisson_log_pmf(k, lam), None
+  )
+
+
 @jit(static_argnums=(2, 3, 4))
 def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
   # Transformed rejection due to Hormann.
@@ -2029,7 +2062,7 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
 
     k = lax.floor((2 * a / u_shifted + b) * u + lam + 0.43)
     s = lax.log(v * inv_alpha / (a / (u_shifted * u_shifted) + b))
-    t = _poisson_log_pmf(k, lam)
+    t = _poisson_rejection_log_pmf(k, lam)
 
     accept1 = (u_shifted >= 0.07) & (v <= v_r)
     reject = (k < 0) | ((u_shifted < 0.013) & (v > u_shifted))
