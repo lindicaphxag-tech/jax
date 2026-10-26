@@ -84,3 +84,20 @@ The test was a **source-equivalent local formula transposition**, not a full nat
 A separate 5-seed × 10,000-draw CPU sampling check of the integer-centered proposal **with** this improved acceptance deviance still occupied all float32 spacing classes, with per-rate variance/mean 0.9976–0.9977 at means from 2e7 to 1.5e8. For `lambda=1e8`, the 8-way residue chi-square p-value was about 0.337. These are not proof of an exact distribution or of a particular performance bound.
 
 The optional `exact_delta` path is used **only within this research branch's BTRS sampler**; public SciPy-shaped `poisson.logpmf(k,mu)` continues to call the unchanged two-argument formulation. This division limits public API risk, though cross-device/compiler and complete numerical acceptance correctness still require independent testing.
+
+
+## 2026-10-26 falsification and mitigation: signed int32 overflow
+
+The earlier *unguarded* integer-centered prototype is **unsafe** near the positive int32 maximum. On a source-matched **JAX 0.9.0.1 CPU** test with 4,096 draws at `lambda = 2**31 - 8192 = 2,147,475,456`, it returned both large positive and **negative** counts (`min=-2,147,483,624`), and the observed sample variance/rate was approximately **2.0788e9**. The released source-matched stable-log-PMF comparator also has a serious pre-existing distributional defect in this range (variance/rate ~0.4299) but did **not** exhibit this prototype's catastrophic signed-wrap variance. This invalidates any claim that the prototype is correct for all int32 rates.
+
+**New conservative guard in fork source:** use integer-centering only when `2**24 <= lambda < 2**30` **and** `abs(local_offset) <= 2**29`. Compute `safe_base` and `safe_offset` using this predicate **before integer casts/addition**. Within this selected region `0 <= base < 2**30` and `|offset| <= 2**29`, so their sum lies between `-2**29` and `(3/2)*2**30`, strictly inside the signed int32 range. Outside, preserve the existing stable-log-PMF sampler's historical float-candidate path; this is a **scope guard, not a fix for the original extreme-rate pathology**.
+
+**Independent local guarded-vs-stable CPU control**, 4,096 matched-key samples per rate, reproducing the same conditional calculation:
+- `lambda=1e3,1e6,1e7,2**24-8`: bit-for-bit equal arrays (low-rate legacy behavior preserved in tested configuration).
+- `lambda=2**24,2e7,1e8,2**28`: centered proposal exercises all sampled float32 integer residue classes, variance/rate ~1.0122 for these fixed keys (not a distributional proof).
+- `lambda=2**30`: unchanged source-matched sampler samples in the tested key, variance/rate ~1.0120 but only 2/128 residue classes.
+- `lambda=2**31-8192`: guarded prototype returns **zero negative counts** in 4,096 tested draws, variance/rate ~0.4207, compared to ~0.4299 for existing source-matched stable sampler. Arrays need **not** remain identical in this near-int32-overflow region due altered fused numerical expressions; *both* have inadequate distribution fidelity.
+
+A new fork-only native regression `testPoissonCenteredInt32RangeGuard` checks the negative-wrap witness. The exact source-transplant reproducer is also available for download from the accompanying research chat; this branch has **not** passed official latest-main native CI. For rates near and above the signed-int32 representability boundary, a correct solution needs explicit distribution/API range semantics; fallback is only damage containment.
+
+**Research integrity update:** all earlier holdout results in the verified 2e7–1.5e8 range remain relevant, but the safe domain of the implementation has been narrowed. Do not describe it as a universally exact integer-valued sampler.
