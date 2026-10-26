@@ -57,6 +57,22 @@ def main():
             assert support_fraction < 0.95, (
                 "Missing integer residue classes", lam, modulus
             )
+    # Even a float64 input/int64 result still traverses the hard-coded
+    # float32 cast in the exact method on the reviewed JAX source.
+    with jax.enable_x64(True):
+        rate64 = jnp.asarray(1e8, dtype=jnp.float64)
+        draws64 = np.asarray(
+            jax.random.poisson(jax.random.key(2026), rate64,
+                               shape=(n,), dtype=jnp.int64)
+        )
+        residues64 = np.unique(draws64 % 8)
+        print("x64_enabled_input_float64_output_int64_mod8=",
+              residues64.tolist(), flush=True)
+        if args.require_full_support:
+            assert len(residues64) > 1, (
+                "Integer output dtype alone does not restore residue support",
+                residues64,
+            )
     print("Observing near-correct variance does NOT establish distributional parity.")
 
 
