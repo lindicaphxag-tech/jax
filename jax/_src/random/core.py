@@ -2038,9 +2038,20 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
     k_float = lax.floor(proposal + lam + 0.43)
     lam_base = lax.floor(lam)
     local_offset = lax.floor(proposal + (lam - lam_base) + 0.43)
-    k_centered = lam_base.astype(dtype) + local_offset.astype(dtype)
-    # Exact old behavior for rates with unit-spaced float32 integers.
-    k = jnp.where(lam < 2**24, k_float.astype(dtype), k_centered)
+    # This exploratory path is restricted to a conservative int32 range:
+    # for rates close to 2**31 an unchecked integer addition wraps to a
+    # negative count (seen in the original research prototype).
+    # Restrict the offset as well so the centered int32 sum cannot overflow.
+    use_centered = (
+        (lam >= 2**24) & (lam < 2**30)
+        & (jnp.abs(local_offset) <= 2**29)
+    )
+    safe_base = jnp.where(use_centered, lam_base, 0.0)
+    safe_offset = jnp.where(use_centered, local_offset, 0.0)
+    k_centered = safe_base.astype(dtype) + safe_offset.astype(dtype)
+    # Preserve the existing stable-PMF sampler outside the validated range.
+    # This fallback does NOT fix the pre-existing high-int32-rate bias.
+    k = jnp.where(use_centered, k_centered, k_float.astype(dtype))
     s = lax.log(v * inv_alpha / (a / (u_shifted * u_shifted) + b))
     # Preserve the exact small integer offset in the central deviance.
     # At float32 rates >= 2**24, lam is integral but k's cast to float32
@@ -2050,7 +2061,7 @@ def _poisson_rejection(key: Key, lam, shape, dtype, max_iters) -> Array:
     t = _poisson_log_pmf(
         k.astype(lam.dtype), lam,
         exact_delta=jnp.where(
-            lam < 2**24, k.astype(lam.dtype) - lam, local_offset))
+            use_centered, local_offset, k.astype(lam.dtype) - lam))
 
     accept1 = (u_shifted >= 0.07) & (v <= v_r)
     reject = (k < 0) | ((u_shifted < 0.013) & (v > u_shifted))
