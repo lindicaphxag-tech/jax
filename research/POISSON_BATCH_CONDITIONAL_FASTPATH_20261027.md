@@ -33,3 +33,20 @@ Source-matched checks: 172,032 fixed-seed samples across six scalar rates all pr
 The new fork code and exact-checkout regression script are pushed, but have NOT been demonstrated passing latest-main native GitHub Actions. Complete current-head CPU tests, mixed-rate and extreme-tail sampling, XLA GPU performance, JIT/vmap and appropriate dtype/algorithm semantics before promotion. A separate high-rate integer-lattice defect remains unresolved and is not addressed by this performance optimization.
 
 Prior negative control: dropping the far-tail formula entirely broke public log-PMF finite extreme values; this helper retains the full fallback.
+
+
+## 2026-10-27 extra mixed-rate stress test (run locally, not exact PR head)
+
+A second **independent local JAX 0.9.0.1 CPU run** used the actual released BTRS method body with full versus guarded PR log-PMF source substitutions, 4096 draws, 12 interleaved JIT-warmed CPU timing pairs per case. Exact same-key integer output equality was observed in all five cases:
+
+| Workload | Guarded/full median paired time | Full median ms | Guarded median ms |
+|---|---:|---:|---:|
+| Uniform λ=1e3 | 0.93793 | 1.504 | 1.409 |
+| Uniform λ=1e8 | 0.86085 | 1.166 | 0.993 |
+| 4-value mix [300, 1e3, 3e6, 1e8] | 0.86184 | 1.148 | 0.979 |
+| 4095×1e8 plus 1×10 | 0.90457 | 1.176 | 1.050 |
+| Repeated [10, 11, 20, 1e3, 1e8] | 0.89057 | 1.815 | 1.619 |
+
+[Recorded JSON statistics](POISSON_GUARDED_MIXED_CPU_RESULTS_20261027.json) and the [extended exact-checkout benchmark gate](../ci/poisson_btrs_conditional_guard_20261027.py) are committed. The JSON is a record of the **local released-runtime source-matched run**, not the output of the freshly committed exact-checkout script. Relative speedups are exploratory and should be repeated on the true target JAX PR head and GPU.
+
+An attempt to edit the official JAX #41228 PR description to share the performance tradeoff and this new candidate returned **403 Resource not accessible by integration**. It is inaccurate to claim the description or maintainer thread was updated; these findings remain in the author's fork unless shared through a permitted interface.
