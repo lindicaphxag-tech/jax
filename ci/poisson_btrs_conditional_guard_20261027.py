@@ -111,11 +111,54 @@ def paired_benchmark():
       }
       measurements.append(row)
       print("PAIR", json.dumps(row, sort_keys=True), flush=True)
+  # Check adversarial mixtures: all-central, a single small-rate item,
+  # and a batch with rates near the rejection-sampler threshold. A scalar-only
+  # speedup is not evidence of real-world mixed-rate efficiency.
+  mixed_scenarios = {
+      "uniform_1000": [1000.],
+      "uniform_1e8": [1e8],
+      "mixed_central": [300., 1000., 3e6, 1e8],
+      "one_near_small": [1e8] * 4095 + [10.],
+      "mixed_near_boundary": [10., 11., 20., 1000., 1e8],
+  }
+  mixed_results = []
+  for label, values in mixed_scenarios.items():
+    rate = jnp.asarray(np.resize(np.asarray(values, np.float32), 4096))
+    args = (jax.random.key(1027), rate, (4096,), np.dtype("int32"), 100)
+    reference = np.asarray(reference_sampler(*args))
+    candidate = np.asarray(candidate_sampler(*args))
+    np.testing.assert_array_equal(reference, candidate)
+    for fn in (reference_sampler, candidate_sampler):
+      fn(*args).block_until_ready()
+    pairs = []
+    for i in range(12):
+      sequence = (
+          (("old", reference_sampler), ("guarded", candidate_sampler))
+          if i % 2 == 0 else
+          (("guarded", candidate_sampler), ("old", reference_sampler))
+      )
+      durations = {}
+      for name, fn in sequence:
+        start = time.perf_counter_ns()
+        fn(*args).block_until_ready()
+        durations[name] = (time.perf_counter_ns() - start) * 1e-6
+      pairs.append(durations)
+    row = {
+        "scenario": label, "n": 4096,
+        "paired_ratio": statistics.median(
+            p["guarded"] / p["old"] for p in pairs),
+        "reference_ms": statistics.median(p["old"] for p in pairs),
+        "guarded_ms": statistics.median(p["guarded"] for p in pairs),
+        "n_pairs": len(pairs), "exact_same_key": True,
+    }
+    mixed_results.append(row)
+    print("MIXED", json.dumps(row, sort_keys=True), flush=True)
   with open("poisson_btrs_guarded_cpu.json", "w", encoding="utf-8") as f:
     json.dump({
         "jax": jax.__version__, "device": str(jax.devices()[0]),
         "source": "current checked-out candidate, exact source-transplant reference",
         "results": measurements,
+        "mixed_scenarios": mixed_results,
     }, f, indent=2)
 
 
