@@ -1,0 +1,192 @@
+{
+  "jax_runtime": "0.9.0.1",
+  "device": "TFRT_CPU_0",
+  "scope": "Installed JAX 0.9.0.1 CPU, source-matched BTRS body and candidate helper; not exact current PR checkout, upstream CI, or GPU.",
+  "protocol": "24 warmed interleaved measurements per cell; compilation excluded; same-key stable-vs-fastpath exact output check.",
+  "held_out_exact_same_key_samples": 172032,
+  "results": [
+    {
+      "lambda": 1000000,
+      "n": 1024,
+      "median_ms": {
+        "old": 0.2935585,
+        "stable": 0.3069935,
+        "fastpath": 0.255496
+      },
+      "fastpath_over_old": 0.870341,
+      "stable_over_old": 1.045766,
+      "fastpath_over_stable": 0.832252,
+      "variance_ratio": {
+        "old": 0.97144196,
+        "stable": 0.95609083,
+        "fastpath": 0.95609083
+      }
+    },
+    {
+      "lambda": 1000000,
+      "n": 8192,
+      "median_ms": {
+        "old": 1.6875125,
+        "stable": 1.989083,
+        "fastpath": 1.6833735
+      },
+      "fastpath_over_old": 0.997547,
+      "stable_over_old": 1.178707,
+      "fastpath_over_stable": 0.846306,
+      "variance_ratio": {
+        "old": 1.02682584,
+        "stable": 1.01276594,
+        "fastpath": 1.01276594
+      }
+    },
+    {
+      "lambda": 1000000,
+      "n": 32768,
+      "median_ms": {
+        "old": 4.631096,
+        "stable": 4.755048,
+        "fastpath": 4.1986635
+      },
+      "fastpath_over_old": 0.906624,
+      "stable_over_old": 1.026765,
+      "fastpath_over_stable": 0.882991,
+      "variance_ratio": {
+        "old": 1.0258085,
+        "stable": 0.99915696,
+        "fastpath": 0.99915696
+      }
+    },
+    {
+      "lambda": 3000000,
+      "n": 1024,
+      "median_ms": {
+        "old": 0.310544,
+        "stable": 0.278906,
+        "fastpath": 0.219586
+      },
+      "fastpath_over_old": 0.707101,
+      "stable_over_old": 0.898121,
+      "fastpath_over_stable": 0.787312,
+      "variance_ratio": {
+        "old": 0.88182638,
+        "stable": 0.95605656,
+        "fastpath": 0.95605656
+      }
+    },
+    {
+      "lambda": 3000000,
+      "n": 8192,
+      "median_ms": {
+        "old": 1.956268,
+        "stable": 2.101237,
+        "fastpath": 1.7962965
+      },
+      "fastpath_over_old": 0.918227,
+      "stable_over_old": 1.074105,
+      "fastpath_over_stable": 0.854876,
+      "variance_ratio": {
+        "old": 0.88188245,
+        "stable": 1.01373826,
+        "fastpath": 1.01373826
+      }
+    },
+    {
+      "lambda": 3000000,
+      "n": 32768,
+      "median_ms": {
+        "old": 5.115532,
+        "stable": 4.8271665,
+        "fastpath": 4.1573555
+      },
+      "fastpath_over_old": 0.812693,
+      "stable_over_old": 0.94363,
+      "fastpath_over_stable": 0.861241,
+      "variance_ratio": {
+        "old": 0.90578682,
+        "stable": 0.99900468,
+        "fastpath": 0.99900468
+      }
+    },
+    {
+      "lambda": 100000000,
+      "n": 1024,
+      "median_ms": {
+        "old": 0.295481,
+        "stable": 0.3284105,
+        "fastpath": 0.2649195
+      },
+      "fastpath_over_old": 0.89657,
+      "stable_over_old": 1.111444,
+      "fastpath_over_stable": 0.806672,
+      "variance_ratio": {
+        "old": 1.55038114,
+        "stable": 0.95600805,
+        "fastpath": 0.95600805
+      }
+    },
+    {
+      "lambda": 100000000,
+      "n": 8192,
+      "median_ms": {
+        "old": 1.582093,
+        "stable": 2.123871,
+        "fastpath": 1.8267375
+      },
+      "fastpath_over_old": 1.154633,
+      "stable_over_old": 1.342444,
+      "fastpath_over_stable": 0.860099,
+      "variance_ratio": {
+        "old": 1.43732084,
+        "stable": 1.01320643,
+        "fastpath": 1.01320643
+      }
+    },
+    {
+      "lambda": 100000000,
+      "n": 32768,
+      "median_ms": {
+        "old": 4.1049065,
+        "stable": 4.672398,
+        "fastpath": 4.1080015
+      },
+      "fastpath_over_old": 1.000754,
+      "stable_over_old": 1.138248,
+      "fastpath_over_stable": 0.879206,
+      "variance_ratio": {
+        "old": 1.44353302,
+        "stable": 0.99907981,
+        "fastpath": 0.99907981
+      }
+    }
+  ],
+  "tail_results": [
+    {
+      "tail_fraction": 0.000030517578125,
+      "tail_count": 1,
+      "n": 32768,
+      "median_ms": {
+        "stable": 0.1694755,
+        "fastpath": 0.173472
+      },
+      "fastpath_over_stable": 1.023582,
+      "exact_fallback_match": true
+    },
+    {
+      "tail_fraction": 0.05,
+      "tail_count": 1638,
+      "n": 32768,
+      "median_ms": {
+        "stable": 0.1319195,
+        "fastpath": 0.1515885
+      },
+      "fastpath_over_stable": 1.1490985,
+      "exact_fallback_match": true
+    }
+  ],
+  "central_formula_max_abs_diff": 9.5367431640625e-7,
+  "notes": [
+    "Rates below 1e6 always use the full helper; the fast path is only eligible for batches where every candidate satisfies the central-domain predicates.",
+    "Timing medians are descriptive and host-dependent, not a guaranteed speedup or a statistical confidence interval.",
+    "Variance ratios come from one fixed key per cell; the repository's existing statistical regression remains the stronger distribution test."
+  ]
+}
