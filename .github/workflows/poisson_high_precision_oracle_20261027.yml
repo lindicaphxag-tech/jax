@@ -1,0 +1,43 @@
+name: Poisson high-precision oracle (fork-only)
+on:
+  push:
+    branches:
+      - research/poisson-highprecision-oracle-20261027
+    paths:
+      - "ci/poisson_high_precision_oracle_20261027.py"
+      - ".github/workflows/poisson_high_precision_oracle_20261027.yml"
+      - "jax/_src/random/core.py"
+      - "jax/_src/scipy/stats/poisson.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-high-precision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install matching CPU runtime and independent oracle
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "jaxlib==0.9.0.1" numpy scipy mpmath
+      - name: Execute exact checked-out JAX source against 100-digit oracle
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          JAX_ENABLE_X64: "true"
+        run: |
+          python ci/poisson_high_precision_oracle_20261027.py
+      - name: Preserve full 126-case results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poisson-high-precision-oracle-126-cases
+          path: poisson_high_precision_oracle_20261027.json
+          if-no-files-found: warn
+          retention-days: 30
