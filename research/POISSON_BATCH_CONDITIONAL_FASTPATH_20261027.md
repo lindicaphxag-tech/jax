@@ -50,3 +50,12 @@ A second **independent local JAX 0.9.0.1 CPU run** used the actual released BTRS
 [Recorded JSON statistics](POISSON_GUARDED_MIXED_CPU_RESULTS_20261027.json) and the [extended exact-checkout benchmark gate](../ci/poisson_btrs_conditional_guard_20261027.py) are committed. The JSON is a record of the **local released-runtime source-matched run**, not the output of the freshly committed exact-checkout script. Relative speedups are exploratory and should be repeated on the true target JAX PR head and GPU.
 
 An attempt to edit the official JAX #41228 PR description to share the performance tradeoff and this new candidate returned **403 Resource not accessible by integration**. It is inaccurate to claim the description or maintainer thread was updated; these findings remain in the author's fork unless shared through a permitted interface.
+
+
+## 2026-10-27 audit: original log-PMF grid accidentally skipped the fast branch
+
+A direct audit revealed that the broad log-PMF parity grid **always included k=0 in the same vector**. Since the candidate uses `jnp.all(central_mask)`, the broad grid always took the full fallback path and **did not validate that the central fast path works**. Treating that old grid as comprehensive conditional coverage was incorrect.
+
+The newly published [exact-branch test gate](../ci/poisson_btrs_conditional_guard_20261027.py) now has `check_both_conditional_branches`: it explicitly asserts an all-central vector triggers the guard, and a single k=0 makes the same batch select the fallback; it compares direct and `jax.jit` results against the full formula for float32 and float64 at means 20, 1000, 3e6 and 1e8.
+
+**Independent local executed CPU check (JAX 0.9.0.1):** the source-equivalent central/conditional implementation was reconstructed from the published portable PMF and sampler files. **32/32 checks passed** across 2 dtypes × 4 means × 2 branches × 2 direct/JIT modes. This is **not** execution of the newly pushed exact-head checkout script, because that script's current source tree is not mounted in the local Python runtime. [Standalone executed control](sandbox:/mnt/data/verify_poisson_guard_branches_20261027.py) is a conversation artifact, not a GitHub CI endorsement. The fork workflow's absence of a new run remains unverified CI, not a pass.
