@@ -1,0 +1,42 @@
+{
+  "jax_version": "0.9.0.1",
+  "device": "CpuDevice(id=0)",
+  "scope": "source-matched installed JAX CPU; not exact upstream checkout or official CI",
+  "gate_activation_trials": 80,
+  "gate_activation": [
+    {"lambda":1000000,"n":256,"hits":2,"trials":80,"fraction":0.025},
+    {"lambda":1000000,"n":1024,"hits":0,"trials":80,"fraction":0},
+    {"lambda":1000000,"n":8192,"hits":0,"trials":80,"fraction":0},
+    {"lambda":1000000,"n":32768,"hits":0,"trials":80,"fraction":0},
+    {"lambda":3000000,"n":256,"hits":11,"trials":80,"fraction":0.1375},
+    {"lambda":3000000,"n":1024,"hits":0,"trials":80,"fraction":0},
+    {"lambda":3000000,"n":8192,"hits":0,"trials":80,"fraction":0},
+    {"lambda":3000000,"n":32768,"hits":0,"trials":80,"fraction":0},
+    {"lambda":10000000,"n":256,"hits":26,"trials":80,"fraction":0.325},
+    {"lambda":10000000,"n":1024,"hits":2,"trials":80,"fraction":0.025},
+    {"lambda":10000000,"n":8192,"hits":0,"trials":80,"fraction":0},
+    {"lambda":10000000,"n":32768,"hits":0,"trials":80,"fraction":0},
+    {"lambda":100000000,"n":256,"hits":58,"trials":80,"fraction":0.725},
+    {"lambda":100000000,"n":1024,"hits":23,"trials":80,"fraction":0.2875},
+    {"lambda":100000000,"n":8192,"hits":0,"trials":80,"fraction":0},
+    {"lambda":100000000,"n":32768,"hits":0,"trials":80,"fraction":0},
+    {"lambda":1000000000,"n":256,"hits":70,"trials":80,"fraction":0.875},
+    {"lambda":1000000000,"n":1024,"hits":53,"trials":80,"fraction":0.6625},
+    {"lambda":1000000000,"n":8192,"hits":2,"trials":80,"fraction":0.025},
+    {"lambda":1000000000,"n":32768,"hits":0,"trials":80,"fraction":0}
+  ],
+  "timings": [
+    {"lambda":1000000,"n":1024,"same_key_sample_agreement_min":1,"stable_median_ms":0.396489,"gated_median_ms":0.356984,"gated_over_stable":0.9003629,"stable_p90_ms":0.5383517,"gated_p90_ms":0.6686917},
+    {"lambda":1000000,"n":8192,"same_key_sample_agreement_min":1,"stable_median_ms":2.6202685,"gated_median_ms":2.912133,"gated_over_stable":1.1113872,"stable_p90_ms":3.3736482,"gated_p90_ms":3.9811784},
+    {"lambda":1000000,"n":32768,"same_key_sample_agreement_min":1,"stable_median_ms":6.3026535,"gated_median_ms":6.564896,"gated_over_stable":1.0416083,"stable_p90_ms":10.3873144,"gated_p90_ms":9.2886116},
+    {"lambda":10000000,"n":1024,"same_key_sample_agreement_min":1,"stable_median_ms":0.361095,"gated_median_ms":0.3705185,"gated_over_stable":1.026097,"stable_p90_ms":0.8099838,"gated_p90_ms":0.5767513},
+    {"lambda":10000000,"n":8192,"same_key_sample_agreement_min":1,"stable_median_ms":2.872317,"gated_median_ms":2.743164,"gated_over_stable":0.9550353,"stable_p90_ms":3.6553309,"gated_p90_ms":3.3784968},
+    {"lambda":10000000,"n":32768,"same_key_sample_agreement_min":1,"stable_median_ms":6.472879,"gated_median_ms":7.7453895,"gated_over_stable":1.1965911,"stable_p90_ms":10.8375203,"gated_p90_ms":11.2057707},
+    {"lambda":100000000,"n":1024,"same_key_sample_agreement_min":1,"stable_median_ms":0.4717855,"gated_median_ms":0.545403,"gated_over_stable":1.1560402,"stable_p90_ms":1.0836699,"gated_p90_ms":1.4586026},
+    {"lambda":100000000,"n":8192,"same_key_sample_agreement_min":1,"stable_median_ms":3.2351585,"gated_median_ms":3.06345,"gated_over_stable":0.9469242,"stable_p90_ms":4.1467482,"gated_p90_ms":4.5983413},
+    {"lambda":100000000,"n":32768,"same_key_sample_agreement_min":1,"stable_median_ms":6.9604825,"gated_median_ms":7.0700285,"gated_over_stable":1.0157383,"stable_p90_ms":9.1534681,"gated_p90_ms":10.6334924},
+    {"lambda":1000000000,"n":1024,"same_key_sample_agreement_min":1,"stable_median_ms":0.4067445,"gated_median_ms":0.2881005,"gated_over_stable":0.7083087,"stable_p90_ms":0.6927804,"gated_p90_ms":0.4808296},
+    {"lambda":1000000000,"n":8192,"same_key_sample_agreement_min":1,"stable_median_ms":2.668365,"gated_median_ms":2.9307075,"gated_over_stable":1.0983158,"stable_p90_ms":3.8792993,"gated_p90_ms":3.9096856},
+    {"lambda":1000000000,"n":32768,"same_key_sample_agreement_min":1,"stable_median_ms":6.1924905,"gated_median_ms":6.623126,"gated_over_stable":1.0695416,"stable_p90_ms":9.8436823,"gated_p90_ms":8.3108759}
+  ]
+}
