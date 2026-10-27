@@ -1,49 +1,49 @@
-# JAX #41228: batch-wide central fast-path audit (2026-10-28)
+# JAX #41228 batch-wide fast-path audit — 2026-10-28
 
-## Question
+This is a fork-side audit of the batch-level `lax.cond(jnp.all(central), ...)` optimization that was briefly present on the official PR head. It is **not** an official JAX CI result.
 
-Does the current official-PR strategy
+## Method
 
-`lax.cond(jnp.all(central), central_formula, full_stable_formula)`
+- Environment: installed JAX 0.9.0.1, CPU.
+- Extracted the installed `_poisson_rejection` body and changed only the acceptance-PMF call.
+- Used the full stable log-PMF and a source-matched transcription of the current PR's central formula and gate.
+- Estimated all-central gate activation from 80 independent proposal batches per rate and shape.
+- Benchmarked 24 paired warmed calls with alternating order and matching PRNG keys. Host CPU timings are diagnostic and noisy, not release-grade performance numbers.
 
-consistently reduce BTRS acceptance-PMF cost for realistic vector batch sizes?
+Reproducer: [`ci/poisson_fastpath_gate_audit_20261028.py`](../ci/poisson_fastpath_gate_audit_20261028.py)  
+Raw measurements: [`research/POISSON_FASTPATH_GATE_AUDIT_20261028.json`](./POISSON_FASTPATH_GATE_AUDIT_20261028.json)
 
-## Method and limits
+## Finding 1: the global gate rarely activates for larger batches
 
-- Reproduced the current PR's central predicate and two formulas in a source-matched probe that instruments the installed JAX `_poisson_rejection` method.
-- Environment: JAX 0.9.0.1, CPU only. This is **not** a checkout of the exact upstream PR source, not an official JAX CI run, and not evidence for TPU/GPU.
-- Gate activation: 80 independent uniform proposal batches per `lambda × batch size`, using the same BTRS proposal expression.
-- Timings: 24 paired calls with alternating execution order after warm-up; same PRNG key per stable/gated comparison. The host CPU runtime is noisy; interpret medians as diagnostic, not a release benchmark.
-- Exact paired samples agreed in all tested seeds and shapes (minimum agreement 1.0), but this does not prove distributional equivalence for all seeds.
+| λ | batch size | all-central hits / 80 |
+|---:|---:|---:|
+| 1e6 | 256 | 2 |
+| 1e6 | 1,024 | 0 |
+| 1e6 | 8,192 | 0 |
+| 1e6 | 32,768 | 0 |
+| 1e8 | 256 | 58 |
+| 1e8 | 1,024 | 23 |
+| 1e8 | 8,192 | 0 |
+| 1e8 | 32,768 | 0 |
+| 1e9 | 256 | 70 |
+| 1e9 | 1,024 | 53 |
+| 1e9 | 8,192 | 2 |
+| 1e9 | 32,768 | 0 |
 
-## Key result: global gate activation collapses with batch size
+The condition requires **every proposal** in the batch to satisfy the central predicate. One tail proposal sends the entire batch through the general formula, so the fast path becomes improbable at large batch sizes.
 
-At `lambda=1e8`, all-central batches occurred in 58/80 trials at n=256, 23/80 at n=1024, and 0/80 at n=8192 or 32768. At `lambda=1e9`, rates were 70/80, 53/80, 2/80 and 0/80, respectively. For `lambda=1e6`, there were no all-central batches in 80 trials at n≥1024.
+## Finding 2: timing is mixed, not a robust general win
 
-The gate is therefore a batch-level optimization whose fast branch becomes improbable for larger batches: one far-tail proposal makes the entire batch execute the full stable helper.
+For 12 rate/shape pairs, gated/full median latency ratios ranged from 0.708 to 1.197. At `λ=1e8, n=32768`, the ratio was 1.016 (about 1.6% slower); at `λ=1e7, n=32768`, it was 1.197 (about 19.7% slower). Several smaller/high-rate cases improved, but the current evidence does not support a general speedup claim. Paired same-key samples agreed on all tested seeds; this is a deterministic counterfactual check, not a proof of distributional identity over all seeds.
 
-## Paired CPU timing
+## Decision applied to the official PR
 
-| lambda | n | full stable median (ms) | global-gated median (ms) | gated/full |
-|---:|---:|---:|---:|---:|
-| 1e6 | 1,024 | 0.396 | 0.357 | 0.900 |
-| 1e6 | 8,192 | 2.620 | 2.912 | 1.111 |
-| 1e6 | 32,768 | 6.303 | 6.565 | 1.042 |
-| 1e7 | 1,024 | 0.361 | 0.371 | 1.026 |
-| 1e7 | 8,192 | 2.872 | 2.743 | 0.955 |
-| 1e7 | 32,768 | 6.473 | 7.745 | 1.197 |
-| 1e8 | 1,024 | 0.472 | 0.545 | 1.156 |
-| 1e8 | 8,192 | 3.235 | 3.063 | 0.947 |
-| 1e8 | 32,768 | 6.960 | 7.070 | 1.016 |
-| 1e9 | 1,024 | 0.407 | 0.288 | 0.708 |
-| 1e9 | 8,192 | 2.668 | 2.931 | 1.098 |
-| 1e9 | 32,768 | 6.192 | 6.623 | 1.070 |
+The unvalidated global fast path and its two helper-specific tests were removed from [JAX #41228](https://github.com/jax-ml/jax/pull/41228). The PR again calls the stable log-PMF directly and retains the large-lambda variance regression test. This deliberately favors a narrower correctness patch over an optimization that did not show consistent wins.
 
-The gate wins in some small/high-rate cases but regresses on several common large batches. This is not a robust general hot-path improvement.
+A future optimization should be evaluated separately, with exact-head CPU and accelerator benchmarks, gate-hit-rate instrumentation, realistic batch sizes, and no claim of speedup unless the representative workload matrix supports it. A chunked conditional prototype was also tested locally, but results were mixed; it is **not** recommended for upstream integration yet.
 
-## Recommendation
+## Current status
 
-Do **not** claim the global all-central gate as a generally faster solution. Keep the correctness fix focused on the stable PMF; treat any specialized BTRS acceleration as a separate follow-up that must demonstrate exact-head CPU and accelerator performance across realistic shapes and report the fraction of batches that take the fast branch. A chunked gate was explored separately, but its CPU results were also mixed and do not yet justify upstream integration.
-
-The current official PR's performance question remains open. This report is fork-side evidence only; no JAX maintainer has been notified through this report.
-
+- Official PR remains open; no merge or new maintainer acceptance is claimed.
+- This audit and raw data live on the author's research branch.
+- The latest official source head has not been run through full JAX native CI in this environment.
