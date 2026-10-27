@@ -47,3 +47,14 @@ A future optimization should be evaluated separately, with exact-head CPU and ac
 - Official PR remains open; no merge or new maintainer acceptance is claimed.
 - This audit and raw data live on the author's research branch.
 - The latest official source head has not been run through full JAX native CI in this environment.
+
+## Baseline versus stable-PMF red/green context
+
+A separate source-matched run on the installed JAX 0.9.0.1 CPU sampler compared the original acceptance expression with the stable helper over five independent 6,000-sample batches per rate (this is also **not** the exact official checkout):
+
+| λ | original variance / λ | stable variance / λ | original median ms | stable median ms |
+|---:|---:|---:|---:|---:|
+| 1e6 | 1.03426 | 0.99744 | 4.576 | 4.061 |
+| 1e8 | 1.43034 | 0.99763 | 2.288 | 2.672 |
+
+This is the actual trade-off: the stable formula removes the severe high-rate variance distortion (the issue's original failure mode) but costs about 16.8% in this particular `lambda=1e8` CPU timing. It is not universally slower either (the `lambda=1e6` run was faster); this is why the PR should claim the correctness fix and disclose the performance limitation rather than attach an unvalidated batch optimization.
