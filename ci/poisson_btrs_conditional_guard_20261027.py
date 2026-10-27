@@ -58,6 +58,53 @@ def check_log_pmf_contract():
   print("PASS: public full-formula parity including small/zero and large k")
 
 
+
+def check_both_conditional_branches():
+  """Exercise BOTH sides of the runtime batch-wide guard, not only fallback.
+
+  The older broad k-grid always included k=0, making jnp.all(central)
+  false. A passing broad-grid test alone cannot validate this fast path.
+  """
+  for dtype in (jnp.float32, jnp.float64):
+    with jax.enable_x64(True):
+      for mean in (20.0, 1000.0, 3e6, 1e8):
+        rate = jnp.asarray(mean, dtype=dtype)
+        # All values lie in the polynomial/asymptotic-Stirling region.
+        delta = jnp.asarray([0., 0., 0., 0., 0.], dtype=dtype)
+        if mean >= 1000:
+          delta = jnp.asarray([-2., -1., 0., 1., 2.], dtype=dtype)
+        central_k = rate + delta
+        safe_k = jnp.maximum(central_k, 1)
+        central_mask = ((safe_k > 10.) & (rate > 0.)
+                        & (jnp.abs((safe_k-rate)/safe_k) <= .01))
+        assert bool(np.asarray(jnp.all(central_mask))), (
+            "central guard unexpectedly false", dtype, mean)
+        for jit in (False, True):
+          candidate = (jax.jit(core._poisson_rejection_log_pmf)
+                       if jit else core._poisson_rejection_log_pmf)
+          actual = np.asarray(candidate(central_k, rate))
+          expected = np.asarray(core._poisson_log_pmf(central_k, rate))
+          np.testing.assert_allclose(actual, expected,
+                                     rtol=1e-6, atol=5e-5)
+
+        # A single out-of-support or noncentral element forces the entire
+        # vector to use the full formula. Check both direct and JIT modes.
+        mixed_k = central_k.at[0].set(0.)
+        mixed_safe = jnp.maximum(mixed_k, 1)
+        mixed_mask = ((mixed_safe > 10.) & (rate > 0.)
+                      & (jnp.abs((mixed_safe-rate)/mixed_safe) <= .01))
+        assert not bool(np.asarray(jnp.all(mixed_mask))), (
+            "fallback guard unexpectedly true", dtype, mean)
+        for jit in (False, True):
+          candidate = (jax.jit(core._poisson_rejection_log_pmf)
+                       if jit else core._poisson_rejection_log_pmf)
+          actual = np.asarray(candidate(mixed_k, rate))
+          expected = np.asarray(core._poisson_log_pmf(mixed_k, rate))
+          np.testing.assert_allclose(actual, expected,
+                                     rtol=1e-6, atol=5e-5)
+  print("PASS: guarded CENTRAL and FULL fallback branches exercised on CPU")
+
+
 def check_source_sampler_parity():
   tested = 0
   for mean in (10., 20., 1000., 1e6, 3e6, 1e8):
@@ -165,5 +212,6 @@ def paired_benchmark():
 if __name__ == "__main__":
   print("JAX", jax.__version__, "from", core.__file__, flush=True)
   check_log_pmf_contract()
+  check_both_conditional_branches()
   check_source_sampler_parity()
   paired_benchmark()
