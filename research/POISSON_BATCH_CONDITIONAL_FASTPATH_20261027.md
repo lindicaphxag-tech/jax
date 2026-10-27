@@ -59,3 +59,29 @@ A direct audit revealed that the broad log-PMF parity grid **always included k=0
 The newly published [exact-branch test gate](../ci/poisson_btrs_conditional_guard_20261027.py) now has `check_both_conditional_branches`: it explicitly asserts an all-central vector triggers the guard, and a single k=0 makes the same batch select the fallback; it compares direct and `jax.jit` results against the full formula for float32 and float64 at means 20, 1000, 3e6 and 1e8.
 
 **Independent local executed CPU check (JAX 0.9.0.1):** the source-equivalent central/conditional implementation was reconstructed from the published portable PMF and sampler files. **32/32 checks passed** across 2 dtypes × 4 means × 2 branches × 2 direct/JIT modes. This is **not** execution of the newly pushed exact-head checkout script, because that script's current source tree is not mounted in the local Python runtime. The local control script is available as a conversation artifact, not a GitHub CI endorsement; the versioned repository-side source-head test is [the guarded CPU gate](../ci/poisson_btrs_conditional_guard_20261027.py). The fork workflow's absence of a new run remains unverified CI, not a pass.
+
+
+## 2026-10-27 adversarial-tail falsification: optimization is NOT universally faster
+
+**Independent local JAX 0.9.0.1 CPU** stress test evaluating the exact same full stable log-PMF and guarded central candidate in the sampler-side arithmetic; compiled/warmed, 24 alternating-order paired CPU timings per case. It directly constructs proposals k around lambda=1e8, then contaminates one, 5%, or half the batch with a true far-tail candidate k=100. Times are for log-PMF evaluation **alone**, not complete PRNG generation or the JAX 0.11 current-head sampler.
+
+| n | batch composition | median guarded/full elapsed time | max abs log-PMF difference |
+|---:|---|---:|---:|
+| 1,024 | all central | 0.6708x | 9.54e-7 |
+| 1,024 | one tail | 1.0667x | 0 |
+| 1,024 | 5% tails | 1.0249x | 0 |
+| 1,024 | half tails | 1.0775x | 0 |
+| 8,192 | all central | 0.8046x | 9.54e-7 |
+| 8,192 | one tail | **1.1115x** | 0 |
+| 8,192 | 5% tails | **1.1377x** | 0 |
+| 8,192 | half tails | **1.0401x** | 0 |
+| 32,768 | all central | 0.7372x | 9.54e-7 |
+| 32,768 | one tail | **1.2494x** | 0 |
+| 32,768 | 5% tails | **1.2853x** | 0 |
+| 32,768 | half tails | **1.2171x** | 0 |
+
+This is a **negative counterexample to unconditional speedup**. Just one noncentral candidate triggers the existing full-path computation **plus** an extra batch-wide reduction/conditional dispatch. It can be substantially slower than calling the full formula directly. Strict array equality in each contaminated case verifies the fallback does not change numeric outputs; minor central floating-point rounding remains (9.54e-7 in this run).
+
+The earlier sampler-level mixed-rate trials, where guard/full medians were 0.861-0.938, **do not override this adverse result**. They test different distributions of candidates and include random generation and rejection overhead. Neither dataset supports a generic faster-sampler promise. The proposed all-batch guard is **not an obvious merge improvement on its current evidence**; prioritize the existing correctness PR #41228, and consider any future fast path only after production workload profiles justify its branch/reduction cost.
+
+[New current-checkout adversarial benchmark script](../ci/poisson_guard_adversarial_cpu_20261027.py) reproduces these controls using the two functions committed on this experimental branch. The local 0.9.0.1 execution above reconstructed the same formulas on the installed package. **No official current-head/GPU result is claimed.**
