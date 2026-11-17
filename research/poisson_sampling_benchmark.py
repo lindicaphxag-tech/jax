@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import platform
 import statistics
@@ -32,11 +33,12 @@ def _git_sha():
 
 def _sample_case(rate, size, dtype, seeds, warmup, repetitions):
     mu = jnp.asarray(rate, dtype=dtype)
-    fn = jax.jit(
-        lambda key: jax.random.poisson(
-            key, mu, shape=(size,), dtype=jnp.int32, method="exact"
-        )
-    )
+    # Current JAX supports method="exact". Older smoke-test installs did
+    # not expose this keyword; retain backwards-compatible diagnostics.
+    kwargs = {"shape": (size,), "dtype": jnp.int32}
+    if "method" in inspect.signature(jax.random.poisson).parameters:
+        kwargs["method"] = "exact"
+    fn = jax.jit(lambda key: jax.random.poisson(key, mu, **kwargs))
     keys = [jax.random.key(seed) for seed in range(seeds)]
     for _ in range(warmup):
         fn(keys[0]).block_until_ready()
