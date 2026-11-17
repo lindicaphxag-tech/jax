@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - research/poisson-41228-cpu-perf-evidence-20261118
-    paths:
-      - research/poisson_41228_benchmark.py
-      - research/poisson_41228_README.md
-      - .github/workflows/poisson-41228-benchmark.yml
   workflow_dispatch:
 
 permissions:
