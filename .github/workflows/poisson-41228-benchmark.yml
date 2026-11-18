@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - research/poisson-41228-cpu-perf-evidence-20261118
+  pull_request:
+    branches:
+      - research/poisson-41228-cpu-perf-evidence-20261118
   workflow_dispatch:
 
 permissions:
