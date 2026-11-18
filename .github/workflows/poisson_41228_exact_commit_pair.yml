@@ -1,6 +1,13 @@
 name: JAX Poisson 41228 exact-commit native CPU pair (manual)
 
 on:
+  push:
+    branches:
+      - evidence/41228-native-rejection-benchmark-20261119
+    paths:
+      - .github/workflows/poisson_41228_exact_commit_pair.yml
+      - research/validation/benchmark_poisson_41228_native.py
+      - research/validation/compare_poisson_41228_native.py
   workflow_dispatch:
 
 permissions:
