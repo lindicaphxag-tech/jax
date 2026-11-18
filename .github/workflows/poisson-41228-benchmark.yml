@@ -30,7 +30,7 @@ jobs:
       - name: Check source is unchanged from official PR head
         run: |
           git diff --exit-code 9428e21c09e6a19cadbf9ed02d6ec78b165f6246 HEAD -- jax/_src/random/core.py
-          python -m compileall -q research/poisson_41228_benchmark.py
+          python -m compileall -q research/poisson_41228_benchmark.py research/poisson_41228_native_gate.py
       - name: Install source checkout and runtime
         run: |
           python -m pip install --upgrade pip
