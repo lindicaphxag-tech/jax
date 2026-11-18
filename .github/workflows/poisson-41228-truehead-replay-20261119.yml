@@ -1,0 +1,62 @@
+name: JAX 41228 exact-head Poisson sampler ABBA CPU benchmark
+
+on:
+  push:
+    branches:
+      - validation/poisson-41228-exact-head-cpu-20261119
+    paths:
+      - ".github/workflows/poisson-41228-truehead-replay-20261119.yml"
+      - "research/poisson_41228_benchmark.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poisson-exact-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JAX_PLATFORMS: cpu
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      XLA_FLAGS: "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check code matches official JAX 41228 head
+        run: |
+          git diff --exit-code 9428e21c09e6a19cadbf9ed02d6ec78b165f6246 HEAD -- jax/_src/random/core.py jax/_src/scipy/stats/poisson.py
+          python -m py_compile research/poisson_41228_benchmark.py
+      - name: Install actual JAX checkout and supporting CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Run ABBA paired rejection sampler (no JIT compilation in timers)
+        run: |
+          python research/poisson_41228_benchmark.py --n 32768 --seeds 12 --output poisson_41228_truehead_cpu_20261119.json
+      - name: Inspect result integrity
+        run: |
+          python - <<'PY'
+          import json
+          p="poisson_41228_truehead_cpu_20261119.json"
+          d=json.load(open(p))
+          assert len(d["records"]) == 3, d
+          for r in d["records"]:
+              assert r["sample_count_per_variant"] == 32768*12
+              assert len(r["raw_old_ms"]) == 24
+              assert len(r["raw_new_ms"]) == 24
+              assert r["old"]["n"] == r["new"]["n"] == 32768*12
+          print("Validated raw measurements and sample counts")
+          PY
+      - name: Upload full source-exact result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jax-41228-truehead-poisson-cpu-raw
+          path: poisson_41228_truehead_cpu_20261119.json
+          if-no-files-found: warn
