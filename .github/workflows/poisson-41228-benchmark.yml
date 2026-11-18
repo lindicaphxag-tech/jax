@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - research/poisson-41228-cpu-perf-evidence-20261118
+  pull_request:
+    branches:
+      - research/poisson-41228-cpu-perf-evidence-20261118
   workflow_dispatch:
 
 permissions:
@@ -23,7 +26,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Check source is unchanged from official PR head
         run: |
           git diff --exit-code 9428e21c09e6a19cadbf9ed02d6ec78b165f6246 HEAD -- jax/_src/random/core.py
@@ -32,6 +35,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .
+          python -m pip install scipy
+      - name: Check native current-head Poisson numerical statistics
+        run: |
+          python research/poisson_41228_native_gate.py
       - name: Execute paired float32 Poisson benchmark
         run: |
           python research/poisson_41228_benchmark.py --n 65536 --seeds 9 --output poisson_41228_exact_head_results.json
