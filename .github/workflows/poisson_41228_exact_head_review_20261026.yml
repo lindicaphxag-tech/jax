@@ -1,35 +1,71 @@
-name: JAX Poisson exact-head CPU review gate
+name: JAX Poisson #41228 exact-head native CPU gate
+
 on:
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/poisson_41228_exact_head_review_20261026.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  poisson-head:
+  poisson-exact-head:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
+    env:
+      JAX_PLATFORMS: cpu
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
     steps:
-      - name: Checkout exact upstream candidate head
+      - name: Checkout exact official PR head (not fork main)
         uses: actions/checkout@v4
         with:
-          ref: 280b8edff3ecf6397d5906f71385fe50bb3e9b75
+          ref: 9428e21c09e6a19cadbf9ed02d6ec78b165f6246
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install native JAX CPU environment
+      - name: Install JAX from the checked-out exact head
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[ci]" scipy pytest absl-py parameterized
-      - name: Verify checkout and CPU backend
+      - name: Verify exact source and host backend
         run: |
-          test "$(git rev-parse HEAD)" = 280b8edff3ecf6397d5906f71385fe50bb3e9b75
-          python -c "import jax; print(jax.__version__, jax.devices())"
-      - name: Run source-native sampling regression
-        run: python -m pytest tests/random_lax_test.py -q -k "PoissonLargeLambdaVariance"
-      - name: Run public vectorized SciPy-parity regressions
+          test "$(git rev-parse HEAD)" = "9428e21c09e6a19cadbf9ed02d6ec78b165f6246"
+          python - <<'PY'
+          import jax
+          from jax._src.random import core
+          assert jax.default_backend() == "cpu", jax.devices()
+          print("JAX", jax.__version__, "jaxlib", jax.lib.__version__)
+          print("Module source:", core.__file__)
+          PY
+      - name: Native PR-head Poisson sampling variance regression
+        run: |
+          python -m pytest tests/random_lax_test.py -q -k "PoissonLargeLambdaVariance"
+      - name: Native PR-head public vector SciPy parity
         env:
           JAX_ENABLE_X64: "true"
-        run: python -m pytest tests/scipy_stats_test.py -q -k "PoissonLogPmfCentralAccuracy or PoissonLogPmfLargeFarTail"
+        run: |
+          python -m pytest tests/scipy_stats_test.py -q -k "PoissonLogPmfCentralAccuracy or PoissonLogPmfLargeFarTail or PoissonLogPmfDomainAndTinyRates or PoissonLogPmfHighPrecisionAndFloat32Maximum or PoissonLogPmfTinyRateDerivatives"
+      - name: Retrieve isolated fork-only benchmark code (not part of official PR)
+        run: |
+          git fetch origin ci/poisson-41228-native-review-gate-20261118
+          git show FETCH_HEAD:research/poisson_41228_benchmark.py > /tmp/poisson_41228_benchmark.py
+          git show FETCH_HEAD:research/poisson_41228_native_gate.py > /tmp/poisson_41228_native_gate.py
+          python -m py_compile /tmp/poisson_41228_benchmark.py /tmp/poisson_41228_native_gate.py
+          test "$(git rev-parse HEAD)" = "9428e21c09e6a19cadbf9ed02d6ec78b165f6246"
+      - name: Native current-source independent numerical gate
+        run: |
+          python /tmp/poisson_41228_native_gate.py
+      - name: Current-source paired CPU timing and variance evidence
+        run: |
+          python /tmp/poisson_41228_benchmark.py --n 32768 --seeds 5 --output poisson_41228_native_cpu_results.json
+      - name: Upload raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poisson-41228-pr-head-cpu
+          path: poisson_41228_native_cpu_results.json
+          if-no-files-found: warn
