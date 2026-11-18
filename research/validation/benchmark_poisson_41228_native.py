@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import platform
+from pathlib import Path
 import statistics
 import subprocess
 import time
@@ -104,11 +105,20 @@ def run_case(dtype, n, rate, *, seed):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
+    parser.add_argument("--require-sha", required=True,
+                        help="exact source commit expected for this execution")
     parser.add_argument("--repeats", type=int, default=1,
                         help="repeat whole experiment with different deterministic seeds")
     args = parser.parse_args()
     if args.repeats < 1:
         parser.error("--repeats must be positive")
+    sha = git_sha()
+    if sha != args.require_sha:
+        parser.error(f"checkout SHA {sha} != expected {args.require_sha}")
+    source_path = Path(jax.__file__).resolve()
+    checkout = Path.cwd().resolve()
+    if not source_path.is_relative_to(checkout):
+        parser.error(f"imported JAX {source_path} is outside checkout {checkout}")
     # Disable x64 *explicitly* for the float32 rejection hot path. The
     # experiment covers float64 separately where the JAX build supports it.
     records = []
@@ -119,7 +129,8 @@ def main():
                 for n in (256, 2048):
                     records.append(run_case(dtype, n, rate, seed=iteration + 13))
     payload = {
-        "git_sha": git_sha(),
+        "git_sha": sha,
+        "source_file": str(source_path),
         "jax_version": jax.__version__,
         "jax_file": jax.__file__,
         "jaxlib_version": getattr(jax.lib, "__version__", None),
