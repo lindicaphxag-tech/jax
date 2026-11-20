@@ -1,0 +1,99 @@
+name: Poisson PR 41228 matched CPU correctness and timing
+on:
+  push:
+    branches:
+      - validation/poisson-41228-timing-20261120
+    paths:
+      - 'validation/poisson_41228_repro_benchmark.py'
+      - '.github/workflows/poisson-41228-before-after.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      JAX_PLATFORMS: cpu
+      OMP_NUM_THREADS: '1'
+      XLA_PYTHON_CLIENT_PREALLOCATE: 'false'
+    steps:
+      - name: Checkout audit harness
+        uses: actions/checkout@v4
+        with:
+          path: audit
+      - name: Checkout upstream PR base, pinned
+        uses: actions/checkout@v4
+        with:
+          repository: jax-ml/jax
+          ref: d3f12669d7db55596d413eba9cfcd214ae5a3ea4
+          path: base
+          persist-credentials: false
+      - name: Checkout proposed patched core, pinned
+        uses: actions/checkout@v4
+        with:
+          repository: lindicaphxag-tech/jax
+          ref: d4d3b491bff6533e036b6bd720e30d1cfee30b35
+          path: patched
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Use exact released CPU JAX wheel dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'jax[cpu]==0.12.1'
+      - name: Verify JAX is really loaded from UPSTREAM baseline checkout
+        env:
+          PYTHONPATH: ${{ github.workspace }}/base
+        run: |
+          mkdir -p results
+          python audit/validation/poisson_41228_repro_benchmark.py \
+            --source base --revision base --output results/base.json \
+            --batch-size 8192 --repeats 4
+      - name: Verify JAX is really loaded from PATCHED checkout
+        env:
+          PYTHONPATH: ${{ github.workspace }}/patched
+        run: |
+          python audit/validation/poisson_41228_repro_benchmark.py \
+            --source patched --revision patched --output results/patched.json \
+            --batch-size 8192 --repeats 4
+      - name: Compare variance correction and report slowdown without hiding it
+        run: |
+          python - <<'PY' | tee results/comparison.txt
+          import json
+          from pathlib import Path
+          a = json.loads(Path("results/base.json").read_text())
+          b = json.loads(Path("results/patched.json").read_text())
+          assert a["jaxlib_version"] == b["jaxlib_version"] == "0.12.1"
+          assert a["device"].startswith("TFRT_CPU") or "CPU" in a["device"].upper()
+          assert b["device"].startswith("TFRT_CPU") or "CPU" in b["device"].upper()
+          assert a["jax_source"] != b["jax_source"]
+          assert [x["rate"] for x in a["cases"]] == [x["rate"] for x in b["cases"]]
+          for old, new in zip(a["cases"], b["cases"]):
+              before, after = old["variance_ratio_to_rate"], new["variance_ratio_to_rate"]
+              slowdown = new["median_elapsed_ms"] / old["median_elapsed_ms"]
+              print(f'rate={old["rate"]:g}: old_var_ratio={before:.6f}, '
+                    f'new_var_ratio={after:.6f}, old_ms={old["median_elapsed_ms"]:.3f}, '
+                    f'new_ms={new["median_elapsed_ms"]:.3f}, patched/base_time={slowdown:.3f}x')
+              assert old["batch_size"] == new["batch_size"]
+              assert old["count"] == new["count"]
+          old = a["cases"][1]["variance_ratio_to_rate"]
+          new = b["cases"][1]["variance_ratio_to_rate"]
+          if not abs(new - 1.0) < abs(old - 1.0):
+              raise AssertionError(f'large-rate Poisson variance not improved: {old=} {new=}')
+          print("CORRECTNESS_COMPARISON_PASS; PERFORMANCE_RATIO_REPORTED_NOT_ASSUMED")
+          PY
+      - name: Preserve exact-code and evidence
+        if: always()
+        run: |
+          mkdir -p results
+          printf 'base=d3f12669d7db55596d413eba9cfcd214ae5a3ea4\npatched=d4d3b491bff6533e036b6bd720e30d1cfee30b35\n' > results/commits.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poisson-41228-variance-and-CPU-timing
+          path: results/
+          if-no-files-found: warn
